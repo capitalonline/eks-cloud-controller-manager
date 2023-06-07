@@ -1,30 +1,17 @@
 package provider
 
 import (
+	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
+	"io"
 	"k8s.io/client-go/informers"
 	cloudprovider "k8s.io/cloud-provider"
 )
 
-const ProviderName = "cdscloud"
-
-//type ControllerClientBuilder struct {
-//}
-//
-//func (c *ControllerClientBuilder) Config(name string) (*restclient.Config, error) {
-//	return nil, nil
-//}
-//
-//func (c *ControllerClientBuilder) ConfigOrDie(name string) *restclient.Config {
-//	return nil
-//}
-//
-//func (c *ControllerClientBuilder) Client(name string) (clientset.Interface, error) {
-//	return nil, nil
-//}
-//
-//func (c *ControllerClientBuilder) ClientOrDie(name string) clientset.Interface {
-//	return nil
-//}
+func init() {
+	cloudprovider.RegisterCloudProvider(consts.ProviderName, func(io.Reader) (cloudprovider.Interface, error) {
+		return &Cloud{}, nil
+	})
+}
 
 type Cloud struct {
 }
@@ -62,7 +49,7 @@ func (cloud *Cloud) Routes() (cloudprovider.Routes, bool) {
 }
 
 func (cloud *Cloud) ProviderName() string {
-	return ProviderName
+	return consts.ProviderName
 }
 
 func (cloud *Cloud) HasClusterID() bool {

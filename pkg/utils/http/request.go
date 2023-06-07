@@ -15,7 +15,7 @@ const (
 	POST = "POST"
 	GET  = "GET"
 
-	RootDomain = "cdsapi.capitalonline.net"
+	RootDomain = "sapi.capitalonline.net"
 	Path       = "/"
 )
 

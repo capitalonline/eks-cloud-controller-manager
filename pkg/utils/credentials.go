@@ -1,4 +1,4 @@
-package common
+package utils
 
 type Credential struct {
 	SecretId  string
