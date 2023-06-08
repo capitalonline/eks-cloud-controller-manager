@@ -1,10 +1,8 @@
-FROM golang:1.19 AS build-env
-RUN apk update && apk add git make
-COPY . /go/src/github.com/capitalonline/eks-cloud-controller-manager
-RUN cd /go/src/github.com/capitalonline/eks-cloud-controller-manager && go build main.go -o ccm
-
-FROM alpine:3.6
-RUN apk update --no-cache && apk add ca-certificates
-COPY --from=build-env /ccm /ccm
-
-ENTRYPOINT ["ccm"]
+FROM golang:1.20 AS build-env
+COPY . /go/src/app/
+RUN  go env -w GO111MODULE=on && go env -w GOPROXY=https://goproxy.io,direct
+RUN cd /go/src/app
+WORKDIR /go/src/app
+RUN go build -o  ccm ./cmd/main.go
+#CMD sleep 3000
+ENTRYPOINT ["./ccm"]

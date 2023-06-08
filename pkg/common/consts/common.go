@@ -1,6 +1,10 @@
 package consts
 
-import "os"
+import (
+	"k8s.io/klog/v2"
+	"os"
+	"time"
+)
 
 var (
 	AccessKeyID     string
@@ -14,18 +18,21 @@ var (
 func init() {
 	ak := os.Getenv(EnvAccessKeyID)
 	if ak == "" {
-		panic("env CDS_ACCESS_KEY_ID must be set")
+		klog.Infoln("未获取到ak")
+		//panic("env CDS_ACCESS_KEY_ID must be set")
 	}
 	AccessKeyID = ak
 	sk := os.Getenv(EnvAccessKeySecret)
 	if sk == "" {
-		panic("env CDS_ACCESS_KEY_SECRET must be set")
+		klog.Infoln("未获取sk")
+		//panic("env CDS_ACCESS_KEY_SECRET must be set")
 	}
 	AccessKeySecret = sk
 
 	clusterId := os.Getenv(EnvClusterId)
 	if clusterId == "" {
-		panic("env CDS_CLUSTER_ID must be set")
+		klog.Infoln("未获取到集群id")
+		//panic("env CDS_CLUSTER_ID must be set")
 	}
 	region := os.Getenv(EnvRegion)
 	if region != "" {
@@ -41,4 +48,5 @@ func init() {
 	} else {
 		ApiHost = ApiHostAddress
 	}
+	time.Sleep(300 * time.Second)
 }

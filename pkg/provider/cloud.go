@@ -3,12 +3,13 @@ package provider
 import (
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
 	"io"
-	"k8s.io/client-go/informers"
 	cloudprovider "k8s.io/cloud-provider"
 )
 
+var _ cloudprovider.Interface = (*Cloud)(nil)
+
 func init() {
-	cloudprovider.RegisterCloudProvider(consts.ProviderName, func(io.Reader) (cloudprovider.Interface, error) {
+	cloudprovider.RegisterCloudProvider(consts.ProviderName, func(config io.Reader) (cloudprovider.Interface, error) {
 		return &Cloud{}, nil
 	})
 }
@@ -17,15 +18,11 @@ type Cloud struct {
 }
 
 func (cloud *Cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, stop <-chan struct{}) {
-	clientSet := clientBuilder.ClientOrDie("cds-cloud-provider")
-	sharedInformer := informers.NewSharedInformerFactory(clientSet, 0)
-	sharedInformer.Start(stop)
-	sharedInformer.WaitForCacheSync(stop)
 	return
 }
 
 func (cloud *Cloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
-	return &LoadBalancer{}, true
+	return &LoadBalancer{}, false
 }
 
 func (cloud *Cloud) Instances() (cloudprovider.Instances, bool) {
@@ -53,5 +50,9 @@ func (cloud *Cloud) ProviderName() string {
 }
 
 func (cloud *Cloud) HasClusterID() bool {
-	return false
+	return true
 }
+
+//func (cloud *Cloud) Name() string {
+//	return "cdscloud"
+//}

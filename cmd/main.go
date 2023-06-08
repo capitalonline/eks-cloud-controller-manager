@@ -1,51 +1,62 @@
 package main
 
 import (
-	"fmt"
+	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/controller"
+
+	_ "github.com/capitalonline/eks-cloud-controller-manager/pkg/provider"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/cloud-provider/app"
 	cloudcontrollerconfig "k8s.io/cloud-provider/app/config"
 	"k8s.io/cloud-provider/options"
-	"k8s.io/component-base/cli"
 	cliflag "k8s.io/component-base/cli/flag"
+	"k8s.io/component-base/logs"
 	_ "k8s.io/component-base/metrics/prometheus/clientgo"
 	_ "k8s.io/component-base/metrics/prometheus/version"
 	"k8s.io/klog/v2"
-	"os"
+	"math/rand"
+	"time"
 )
 
 func main() {
-	ccmOptions, err := options.NewCloudControllerManagerOptions()
+	rand.Seed(time.Now().UTC().UnixNano())
+	logs.InitLogs()
+	defer logs.FlushLogs()
+	opts, err := options.NewCloudControllerManagerOptions()
 	if err != nil {
 		klog.Fatalf("unable to initialize command options: %v", err)
 	}
-
+	opts.NodeStatusUpdateFrequency = metav1.Duration{Duration: time.Second * 30}
 	controllerInitializers := app.DefaultInitFuncConstructors
 
-	nodeController := controller.NodeController{}
-	//nodeIpamController.nodeIPAMControllerOptions.NodeIPAMControllerConfiguration = &nodeIpamController.nodeIPAMControllerConfiguration
+	nodeController := controller.ControllerWrapper{}
 	fss := cliflag.NamedFlagSets{}
-	//nodeIpamController.nodeIPAMControllerOptions.AddFlags(fss.FlagSet("nodeipam controller"))
 
-	controllerInitializers["nodeLabelTaint"] = app.ControllerInitFuncConstructor{
+	controllerInitializers[controller.NodeControllerKey] = app.ControllerInitFuncConstructor{
 		InitContext: app.ControllerInitContext{
-			ClientName: "node-controller",
+			ClientName: controller.NodeControllerClientName,
 		},
 		Constructor: nodeController.StartNodeControllerWrapper,
 	}
-
-	command := app.NewCloudControllerManagerCommand(ccmOptions, cloudInitializer, controllerInitializers, fss, wait.NeverStop)
-	fmt.Println(command)
-	code := cli.Run(command)
-	os.Exit(code)
+	fss.FlagSet(consts.ProviderName)
+	//app.ControllersDisabledByDefault.Insert(controller.NodeControllerKey)
+	command := app.NewCloudControllerManagerCommand(opts, cloudInitializer, controllerInitializers, fss, wait.NeverStop)
+	if err := command.Execute(); err != nil {
+		klog.Fatalf("unable to execute command: %v", err)
+	}
 }
 
 func cloudInitializer(config *cloudcontrollerconfig.CompletedConfig) cloudprovider.Interface {
 	cloudConfig := config.ComponentConfig.KubeCloudShared.CloudProvider
-	// initialize cloud provider with the cloud provider name and config file provided
-	cloud, err := cloudprovider.InitCloudProvider(cloudConfig.Name, cloudConfig.CloudConfigFile)
+	klog.Info("cloudConfig ", cloudConfig)
+	providerName := cloudConfig.Name
+	if providerName == "" {
+		providerName = consts.ProviderName
+	}
+	cloud, err := cloudprovider.InitCloudProvider(consts.ProviderName, cloudConfig.CloudConfigFile)
+
 	if err != nil {
 		klog.Fatalf("Cloud provider could not be initialized: %v", err)
 	}
