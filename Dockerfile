@@ -4,5 +4,9 @@ RUN  go env -w GO111MODULE=on && go env -w GOPROXY=https://goproxy.io,direct
 RUN cd /go/src/app
 WORKDIR /go/src/app
 RUN go build -o  ccm ./cmd/main.go
-#CMD sleep 3000
+
+FROM alpine:3.6
+RUN apk update --no-cache && apk add ca-certificates
+COPY --from=build-env /go/src/app/ccm /ccm
+
 ENTRYPOINT ["./ccm"]

@@ -3,7 +3,6 @@ package consts
 import (
 	"k8s.io/klog/v2"
 	"os"
-	"time"
 )
 
 var (
@@ -48,5 +47,5 @@ func init() {
 	} else {
 		ApiHost = ApiHostAddress
 	}
-	time.Sleep(300 * time.Second)
+	//time.Sleep(300 * time.Second)
 }
