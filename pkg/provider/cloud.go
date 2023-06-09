@@ -42,7 +42,7 @@ func (cloud *Cloud) Clusters() (cloudprovider.Clusters, bool) {
 }
 
 func (cloud *Cloud) Routes() (cloudprovider.Routes, bool) {
-	return &Routes{}, true
+	return &Routes{}, false
 }
 
 func (cloud *Cloud) ProviderName() string {

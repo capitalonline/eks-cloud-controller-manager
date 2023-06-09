@@ -1,12 +1,28 @@
-FROM golang:1.20 AS build-env
-COPY . /go/src/app/
-RUN  go env -w GO111MODULE=on && go env -w GOPROXY=https://goproxy.io,direct
-RUN cd /go/src/app
-WORKDIR /go/src/app
-RUN go build -o  ccm ./cmd/main.go
+FROM golang:1.20 as build
+RUN mkdir /app
+RUN mkdir /app/bin
+COPY . /app/
+RUN go env -w GO111MODULE=on
+# RUN go env -w GOPROXY=https://goproxy.cn,direct
+RUN go env
 
-FROM alpine:3.6
-RUN apk update --no-cache && apk add ca-certificates
-COPY --from=build-env /go/src/app/ccm /ccm
+ARG bin_file
 
-ENTRYPOINT ["./ccm"]
+WORKDIR /app
+RUN go mod tidy
+RUN CGO_ENABLED=0 GOARCH="amd64" GOOS="linux" go build -ldflags " -s -w" -o bin/${bin_file}  ./cmd/${bin_file}.go
+
+
+FROM alpine:3.16 as run
+
+ARG bin_file
+
+ENV TO_BIN_FILE ${bin_file}
+
+COPY --from=build /app/bin/${bin_file} /app/${bin_file}
+
+WORKDIR /app/
+
+RUN chmod -R 777 /app/
+
+ENTRYPOINT /app/${TO_BIN_FILE}

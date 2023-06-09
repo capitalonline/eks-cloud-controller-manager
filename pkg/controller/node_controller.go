@@ -58,7 +58,7 @@ func NewNodeController() NodeController {
 
 func (n *NodeController) Run(ctx context.Context) error {
 	klog.Info("开始运行run")
-	ticker := time.NewTicker(time.Second * 5)
+	ticker := time.NewTicker(time.Minute)
 	for {
 		select {
 		case <-ticker.C:

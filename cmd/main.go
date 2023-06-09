@@ -5,7 +5,6 @@ import (
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/controller"
 
 	_ "github.com/capitalonline/eks-cloud-controller-manager/pkg/provider"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/cloud-provider/app"
@@ -29,7 +28,7 @@ func main() {
 	if err != nil {
 		klog.Fatalf("unable to initialize command options: %v", err)
 	}
-	opts.NodeStatusUpdateFrequency = metav1.Duration{Duration: time.Second * 30}
+	//opts.NodeStatusUpdateFrequency = metav1.Duration{Duration: time.Second * 30}
 	controllerInitializers := app.DefaultInitFuncConstructors
 
 	nodeController := controller.ControllerWrapper{}
@@ -44,7 +43,7 @@ func main() {
 	fss.FlagSet(consts.ProviderName)
 	//app.ControllersDisabledByDefault.Insert(controller.NodeControllerKey)
 	command := app.NewCloudControllerManagerCommand(opts, cloudInitializer, controllerInitializers, fss, wait.NeverStop)
-	command.Flags().Set("cloud-provider", "true")
+	//command.Flags().Set("cloud-provider", "true")
 
 	if err := command.Execute(); err != nil {
 		klog.Fatalf("unable to execute command: %v", err)
