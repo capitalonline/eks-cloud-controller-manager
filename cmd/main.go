@@ -21,6 +21,7 @@ import (
 )
 
 func main() {
+	klog.Info("程序启动")
 	rand.Seed(time.Now().UTC().UnixNano())
 	logs.InitLogs()
 	defer logs.FlushLogs()
@@ -36,13 +37,15 @@ func main() {
 
 	controllerInitializers[controller.NodeControllerKey] = app.ControllerInitFuncConstructor{
 		InitContext: app.ControllerInitContext{
-			ClientName: controller.NodeControllerClientName,
+			ClientName: "node-controller",
 		},
 		Constructor: nodeController.StartNodeControllerWrapper,
 	}
 	fss.FlagSet(consts.ProviderName)
 	//app.ControllersDisabledByDefault.Insert(controller.NodeControllerKey)
 	command := app.NewCloudControllerManagerCommand(opts, cloudInitializer, controllerInitializers, fss, wait.NeverStop)
+	command.Flags().Set("cloud-provider", "true")
+
 	if err := command.Execute(); err != nil {
 		klog.Fatalf("unable to execute command: %v", err)
 	}
