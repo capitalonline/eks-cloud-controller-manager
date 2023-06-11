@@ -90,6 +90,22 @@ subjects:
   - kind: ServiceAccount
     name: cloud-controller-manager
     namespace: kube-system
+
+#---
+#apiVersion: rbac.authorization.k8s.io/v1
+#kind: RoleBinding
+#metadata:
+#  name: cloud-controller-manager:apiserver-authentication-reader
+#  namespace: kube-system
+#roleRef:
+#  apiGroup: rbac.authorization.k8s.io
+#  kind: Role
+#  name: extension-apiserver-authentication-reader
+#subjects:
+#  - apiGroup: ""
+#    kind: ServiceAccount
+#    name: cloud-controller-manager
+#    namespace: kube-system
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -104,8 +120,8 @@ spec:
       app: cds-cloud-controller-manager
   template:
     metadata:
-      annotations:
-        scheduler.alpha.kubernetes.io/critical-pod: ""
+#      annotations:
+#        scheduler.alpha.kubernetes.io/critical-pod: ""
       labels:
         app: cds-cloud-controller-manager
     spec:
@@ -151,10 +167,20 @@ spec:
       dnsPolicy: Default
       hostNetwork: true
       serviceAccountName: cloud-controller-manager
+#      tolerations:
+#        - effect: NoSchedule
+#          key: node.cloudprovider.kubernetes.io/uninitialized
+#          operator: Exists
+#        - effect: NoSchedule
+#          key: node-role.kubernetes.io/master
+#          operator: Exists
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/master
+                    operator: Exists
       tolerations:
-        - effect: NoSchedule
-          key: node.cloudprovider.kubernetes.io/uninitialized
-          operator: Exists
-        - effect: NoSchedule
-          key: node-role.kubernetes.io/master
-          operator: Exists
+        - operator: Exists
+          effect: NoSchedule

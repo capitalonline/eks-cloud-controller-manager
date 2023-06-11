@@ -47,5 +47,4 @@ func init() {
 	} else {
 		ApiHost = ApiHostAddress
 	}
-	//time.Sleep(300 * time.Second)
 }
