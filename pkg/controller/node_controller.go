@@ -86,7 +86,7 @@ func (n *NodeController) Update(ctx context.Context) error {
 	}
 	for i := 0; i < len(nodes.Items); i++ {
 		node := nodes.Items[i]
-		details, err := eks.DescribeNodeDetails(consts.ClusterId, node.GetName())
+		details, err := eks.NodeCCMInit(consts.ClusterId, node.GetName())
 		if err != nil {
 			return err
 		}
@@ -102,7 +102,7 @@ func (n *NodeController) Update(ctx context.Context) error {
 }
 
 // UpdateNode 设置节点的污点
-func UpdateNode(node *v1.Node, detail *commoneks.DescribeEKSNodeResponseData) (bool, error) {
+func UpdateNode(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) (bool, error) {
 	klog.Info("更新节点")
 	if detail == nil || node == nil {
 		return false, errors.New("invalid node")
@@ -113,7 +113,7 @@ func UpdateNode(node *v1.Node, detail *commoneks.DescribeEKSNodeResponseData) (b
 }
 
 // UpdateNodeLabels 更新节点标签
-func UpdateNodeLabels(node *v1.Node, detail *commoneks.DescribeEKSNodeResponseData) bool {
+func UpdateNodeLabels(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) bool {
 	klog.Info("更新节点的标签")
 	if len(detail.Labels) == 0 {
 		return false
@@ -133,7 +133,7 @@ func UpdateNodeLabels(node *v1.Node, detail *commoneks.DescribeEKSNodeResponseDa
 }
 
 // UpdateNodeTaints 修改节点的污点
-func UpdateNodeTaints(node *v1.Node, detail *commoneks.DescribeEKSNodeResponseData) bool {
+func UpdateNodeTaints(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) bool {
 	klog.Info("更新节点的污点")
 	taints := make([]v1.Taint, 0, 0)
 	taintMap := make(map[string]v1.Taint)

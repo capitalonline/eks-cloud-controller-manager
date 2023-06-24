@@ -13,7 +13,8 @@ RUN go mod tidy
 RUN CGO_ENABLED=0 GOARCH="amd64" GOOS="linux" go build -ldflags " -s -w" -o bin/${bin_file}  ./cmd/${bin_file}.go
 
 
-FROM alpine:3.16 as run
+#FROM alpine:3.16 as run
+FROM ubuntu:20.04 as run
 
 ARG bin_file
 

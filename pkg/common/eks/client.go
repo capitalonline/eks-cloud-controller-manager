@@ -33,11 +33,34 @@ func NewDescribeEKSNodeResponse() (response *DescribeEKSNodeResponse) {
 	return
 }
 
+func NewNodeCCMInitRequest() (request *NodeCCMInitRequest) {
+	request = &NodeCCMInitRequest{
+		BaseRequest: &cdshttp.BaseRequest{},
+	}
+	request.SetDomain(consts.ApiHost)
+	request.Init().WithApiInfo(consts.ServiceEKS, consts.ApiVersion, consts.ActionNodeCCMInit)
+	return
+}
+
+func NewNodeCCMInitResponse() (response *NodeCCMInitResponse) {
+	response = &NodeCCMInitResponse{BaseResponse: &cdshttp.BaseResponse{}}
+	return
+}
+
 func (c *Client) DescribeEKSNode(request *DescribeEKSNodeRequest) (response *DescribeEKSNodeResponse, err error) {
 	if request == nil {
 		request = NewDescribeEKSNodeRequest()
 	}
 	response = NewDescribeEKSNodeResponse()
+	err = c.Send(request, response)
+	return
+}
+
+func (c *Client) NodeCCMInit(request *NodeCCMInitRequest) (response *NodeCCMInitResponse, err error) {
+	if request == nil {
+		request = NewNodeCCMInitRequest()
+	}
+	response = NewNodeCCMInitResponse()
 	err = c.Send(request, response)
 	return
 }

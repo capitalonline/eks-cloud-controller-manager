@@ -13,6 +13,7 @@ const (
 
 const (
 	ActionDescribeEKSNode = "DescribeEKSNode"
+	ActionNodeCCMInit     = "NodeCCMInit"
 )
 
 const (
