@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
 	commoneks "github.com/capitalonline/eks-cloud-controller-manager/pkg/common/eks"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/eks"
@@ -11,12 +12,14 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
+	metrics "k8s.io/metrics/pkg/client/clientset/versioned"
 	"log"
 	"time"
 )
 
 type NodeController struct {
-	clientSet *kubernetes.Clientset
+	clientSet     *kubernetes.Clientset
+	metricsClient *metrics.Clientset
 }
 
 func (n *NodeController) Validate() error {
@@ -53,7 +56,41 @@ func NewNodeController() NodeController {
 		log.Fatalf("newCloud:: Failed to create kubernetes config: %v", err)
 	}
 	clientSet, err := kubernetes.NewForConfig(config)
-	return NodeController{clientSet: clientSet}
+	metricsClient, err := metrics.NewForConfig(config)
+	if err != nil {
+		panic(err)
+	}
+	return NodeController{clientSet: clientSet, metricsClient: metricsClient}
+}
+
+// CollectPlayLoad 获取集群节点的负载信息
+func (n *NodeController) CollectPlayLoad(ctx context.Context) error {
+	metricList, err := n.metricsClient.MetricsV1beta1().NodeMetricses().List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+	// 查询所有节点信息，获取余量信息
+	nodeList, err := n.clientSet.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
+	//metricList.
+	if err != nil {
+		return err
+	}
+	nodeSet := make(map[string]v1.ResourceList)
+	for _, node := range nodeList.Items {
+		nodeSet[node.Name] = node.Status.Allocatable
+	}
+	for _, metric := range metricList.Items {
+		nodeInfo := nodeSet[metric.Name]
+		usage := metric.Usage
+		cpu := float64(usage.Cpu().MilliValue()) / float64(nodeInfo.Cpu().MilliValue())
+		memory := float64(usage.Memory().MilliValue()) / float64(nodeInfo.Memory().MilliValue())
+		//line := fmt.Sprintf("node: %s cpu: %f  memory: %f", metric.Name, cpu, memory)
+		line := fmt.Sprintf("node: %s cpu: %d%%\t  memory: %d%%\t", metric.Name, int64(cpu*100), int64(memory*100))
+		fmt.Println(line)
+	}
+	//fmt.Sprintf()
+	//fmt.Println(metricList)
+	return nil
 }
 
 func (n *NodeController) Run(ctx context.Context) error {
