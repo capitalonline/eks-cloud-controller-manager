@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httputil"
+	"os"
 	"strings"
 	"time"
 
@@ -89,8 +90,11 @@ func (c *Client) sendWithSignatureCds(request cdshttp.Request, response cdshttp.
 		}
 		requestPayload = string(b)
 	}
-
-	url := "https://" + request.GetDomain() + request.GetPath()
+	var schema = "https"
+	if os.Getenv("CDS_API_SCHEMA") != "" {
+		schema = os.Getenv("CDS_API_SCHEMA")
+	}
+	url := schema + "://" + request.GetDomain() + request.GetPath()
 	if canonicalQueryString != "" {
 		url = url + "?" + canonicalQueryString
 	}

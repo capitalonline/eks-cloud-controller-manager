@@ -3,7 +3,7 @@ package consts
 const ApiVersion = "2019-08-08"
 
 const (
-	ServiceEKS = "eks"
+	ServiceEKS = "eks/v1"
 )
 const ProviderName = "cdscloud"
 
@@ -12,8 +12,9 @@ const (
 )
 
 const (
-	ActionDescribeEKSNode = "DescribeEKSNode"
-	ActionNodeCCMInit     = "NodeCCMInit"
+	ActionDescribeEKSNode   = "DescribeEKSNode"
+	ActionNodeCCMInit       = "NodeCCMInit"
+	ActionModifyClusterLoad = "ModifyClusterLoad"
 )
 
 const (
@@ -23,4 +24,5 @@ const (
 	EnvAPIHost         = "CDS_API_HOST"
 	EnvClusterId       = "CDS_CLUSTER_ID"
 	EnvAz              = "CDS_CLUSTER_AZ"
+	SCHEMA             = "CDS_API_SCHEMA"
 )
