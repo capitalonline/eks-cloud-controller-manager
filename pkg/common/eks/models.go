@@ -109,3 +109,46 @@ func (resp *NodeCCMInitResponseData) ToJsonString() string {
 func (resp *NodeCCMInitResponseData) FromJsonString(s string) error {
 	return json.Unmarshal([]byte(s), &resp)
 }
+
+type ModifyClusterLoadRequest struct {
+	*cdshttp.BaseRequest
+	ClusterId string                     `json:"ClusterId,omitempty"`
+	NodeList  []ModifyClusterLoadReqNode `json:"NodeList,omitempty"`
+}
+
+func (req *ModifyClusterLoadRequest) ToJsonString() string {
+	b, _ := json.Marshal(req)
+	return string(b)
+}
+
+func (req *ModifyClusterLoadRequest) FromJsonString(s string) error {
+	return json.Unmarshal([]byte(s), &req)
+}
+
+type ModifyClusterLoadResponse struct {
+	*cdshttp.BaseResponse
+	Code string `json:"Code"`
+	Msg  string `json:"Msg"`
+}
+
+type ModifyClusterLoadReqNode struct {
+	NodeId string       `json:"NodeId"`
+	Cpu    ResourceInfo `json:"Cpu"`
+	Memory ResourceInfo `json:"Memory"`
+	Status string       `json:"Status"`
+}
+
+type ResourceInfo struct {
+	Usage    int64 `json:"Usage"`
+	Limits   int64 `json:"Limits"`
+	Requests int64 `json:"Requests"`
+}
+
+func (resp *ModifyClusterLoadResponse) ToJsonString() string {
+	b, _ := json.Marshal(resp)
+	return string(b)
+}
+
+func (resp *ModifyClusterLoadResponse) FromJsonString(s string) error {
+	return json.Unmarshal([]byte(s), &resp)
+}

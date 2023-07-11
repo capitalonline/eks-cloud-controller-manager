@@ -47,6 +47,20 @@ func NewNodeCCMInitResponse() (response *NodeCCMInitResponse) {
 	return
 }
 
+func NewModifyClusterLoadRequest() (request *ModifyClusterLoadRequest) {
+	request = &ModifyClusterLoadRequest{
+		BaseRequest: &cdshttp.BaseRequest{},
+	}
+	request.SetDomain(consts.ApiHost)
+	request.Init().WithApiInfo(consts.ServiceEKS, consts.ApiVersion, consts.ActionModifyClusterLoad)
+	return
+}
+
+func NewModifyClusterLoadResponse() (response *ModifyClusterLoadResponse) {
+	response = &ModifyClusterLoadResponse{BaseResponse: &cdshttp.BaseResponse{}}
+	return
+}
+
 func (c *Client) DescribeEKSNode(request *DescribeEKSNodeRequest) (response *DescribeEKSNodeResponse, err error) {
 	if request == nil {
 		request = NewDescribeEKSNodeRequest()
@@ -61,6 +75,15 @@ func (c *Client) NodeCCMInit(request *NodeCCMInitRequest) (response *NodeCCMInit
 		request = NewNodeCCMInitRequest()
 	}
 	response = NewNodeCCMInitResponse()
+	err = c.Send(request, response)
+	return
+}
+
+func (c *Client) ModifyClusterLoad(request *ModifyClusterLoadRequest) (response *ModifyClusterLoadResponse, err error) {
+	if request == nil {
+		request = NewModifyClusterLoadRequest()
+	}
+	response = NewModifyClusterLoadResponse()
 	err = c.Send(request, response)
 	return
 }

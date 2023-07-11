@@ -29,7 +29,7 @@ func NodeCCMInit(clusterId, nodeId string) (*eks.NodeCCMInitResponse, error) {
 	credential := utils.NewCredential(consts.AccessKeyID, consts.AccessKeySecret)
 
 	cpf := profile.NewClientProfile()
-	cpf.HttpProfile.ReqMethod = http.MethodPost
+	cpf.HttpProfile.ReqMethod = http.MethodGet
 	client, _ := eks.NewClient(credential, consts.Region, cpf)
 	request := eks.NewNodeCCMInitRequest()
 	request.NodeId = nodeId
@@ -39,5 +39,17 @@ func NodeCCMInit(clusterId, nodeId string) (*eks.NodeCCMInitResponse, error) {
 		return nil, err
 	}
 
+	return response, err
+}
+
+func ModifyClusterLoad(request *eks.ModifyClusterLoadRequest) (*eks.ModifyClusterLoadResponse, error) {
+	credential := utils.NewCredential(consts.AccessKeyID, consts.AccessKeySecret)
+	cpf := profile.NewClientProfile()
+	cpf.HttpProfile.ReqMethod = http.MethodPost
+	client, _ := eks.NewClient(credential, consts.Region, cpf)
+	response, err := client.ModifyClusterLoad(request)
+	if err != nil {
+		return nil, err
+	}
 	return response, err
 }
