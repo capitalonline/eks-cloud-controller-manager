@@ -33,6 +33,9 @@ func (c *Client) Send(request cdshttp.Request, response cdshttp.Response) (err e
 		if domain == "" {
 			domain = cdshttp.GetServiceDomain(request.GetService())
 		}
+		if request.GetService() != "" {
+			domain = domain + "/" + request.GetService()
+		}
 		request.SetDomain(domain)
 	}
 

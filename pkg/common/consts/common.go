@@ -28,8 +28,9 @@ func init() {
 	}
 	AccessKeySecret = sk
 
-	clusterId := os.Getenv(EnvClusterId)
-	if clusterId == "" {
+	ClusterId = os.Getenv(EnvClusterId)
+
+	if ClusterId == "" {
 		klog.Infoln("未获取到集群id")
 		//panic("env CDS_CLUSTER_ID must be set")
 	}

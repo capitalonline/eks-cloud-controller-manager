@@ -12,7 +12,8 @@ func NodeAddresses(clusterId, nodeId, nodeName string) ([]string, error) {
 	credential := utils.NewCredential(consts.AccessKeyID, consts.AccessKeySecret)
 
 	cpf := profile.NewClientProfile()
-	cpf.HttpProfile.ReqMethod = http.MethodPost
+	cpf.HttpProfile.ReqMethod = http.MethodGet
+	cpf.HttpProfile.Endpoint = consts.ApiHost
 	client, _ := eks.NewClient(credential, consts.Region, cpf)
 	request := eks.NewNodeCCMInitRequest()
 	request.NodeId = nodeId
@@ -30,6 +31,7 @@ func NodeCCMInit(clusterId, nodeId string) (*eks.NodeCCMInitResponse, error) {
 
 	cpf := profile.NewClientProfile()
 	cpf.HttpProfile.ReqMethod = http.MethodGet
+	cpf.HttpProfile.Endpoint = consts.ApiHost
 	client, _ := eks.NewClient(credential, consts.Region, cpf)
 	request := eks.NewNodeCCMInitRequest()
 	request.NodeId = nodeId
@@ -46,6 +48,7 @@ func ModifyClusterLoad(request *eks.ModifyClusterLoadRequest) (*eks.ModifyCluste
 	credential := utils.NewCredential(consts.AccessKeyID, consts.AccessKeySecret)
 	cpf := profile.NewClientProfile()
 	cpf.HttpProfile.ReqMethod = http.MethodPost
+	cpf.HttpProfile.Endpoint = consts.ApiHost
 	client, _ := eks.NewClient(credential, consts.Region, cpf)
 	response, err := client.ModifyClusterLoad(request)
 	if err != nil {

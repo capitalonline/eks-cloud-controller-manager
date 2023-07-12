@@ -146,12 +146,12 @@ func (n *NodeController) Run(ctx context.Context) error {
 
 func (n *NodeController) Update(ctx context.Context) error {
 	klog.Info("开始获取节点信息")
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		log.Fatalf("newCloud:: Failed to create kubernetes config: %v", err)
-	}
-	clientSet, err := kubernetes.NewForConfig(config)
-	nodes, err := clientSet.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
+	//config, err := rest.InClusterConfig()
+	//if err != nil {
+	//	log.Fatalf("newCloud:: Failed to create kubernetes config: %v", err)
+	//}
+	//clientSet, err := kubernetes.NewForConfig(config)
+	nodes, err := n.clientSet.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		klog.Error("list nodes failed")
 	}
@@ -166,7 +166,8 @@ func (n *NodeController) Update(ctx context.Context) error {
 			return err
 		}
 		if flag {
-			clientSet.CoreV1().Nodes().Update(context.Background(), &node, metav1.UpdateOptions{})
+			_, err = n.clientSet.CoreV1().Nodes().Update(context.Background(), &node, metav1.UpdateOptions{})
+			fmt.Println(err)
 		}
 	}
 	return nil
