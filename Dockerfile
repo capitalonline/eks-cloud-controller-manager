@@ -3,7 +3,7 @@ RUN mkdir /app
 RUN mkdir /app/bin
 COPY . /app/
 RUN go env -w GO111MODULE=on
-# RUN go env -w GOPROXY=https://goproxy.cn,direct
+RUN go env -w GOPROXY=https://goproxy.cn,direct
 RUN go env
 
 ARG bin_file
@@ -13,8 +13,7 @@ RUN go mod tidy
 RUN CGO_ENABLED=0 GOARCH="amd64" GOOS="linux" go build -ldflags " -s -w" -o bin/${bin_file}  ./cmd/${bin_file}.go
 
 
-#FROM alpine:3.16 as run
-FROM ubuntu:20.04 as run
+FROM alpine:3.16 as run
 
 ARG bin_file
 
@@ -26,4 +25,4 @@ WORKDIR /app/
 
 RUN chmod -R 777 /app/
 
-ENTRYPOINT /app/${TO_BIN_FILE}
+ENTRYPOINT /app/${TO_BIN_FILE} --cloud-provider=cdscloud --leader-elect=false

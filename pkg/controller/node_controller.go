@@ -45,11 +45,13 @@ func NewNodeController() NodeController {
 func (n *NodeController) CollectPlayLoad(ctx context.Context) error {
 	metricList, err := n.metricsClient.MetricsV1beta1().NodeMetricses().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
+		klog.Info("获取指标列表失败，err:", err)
 		return err
 	}
 	// 查询所有节点信息，获取余量信息
 	nodeList, err := n.clientSet.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
+		klog.Info("获取节点列表失败，err:", err)
 		return err
 	}
 	nodeSet := make(map[string]v1.Node)
@@ -122,8 +124,10 @@ func (n *NodeController) CollectPlayLoad(ctx context.Context) error {
 	}
 	_, err = eks.ModifyClusterLoad(request)
 	if err != nil {
+		klog.Info("同步节点负载失败，err:", err)
 		return err
 	}
+	klog.Info("更新节点负载成功")
 	return nil
 }
 
@@ -134,6 +138,10 @@ func (n *NodeController) Run(ctx context.Context) error {
 		select {
 		case <-ticker.C:
 			err := n.Update(ctx)
+			if err != nil {
+				klog.Infoln(err)
+			}
+			err = n.CollectPlayLoad(ctx)
 			if err != nil {
 				klog.Infoln(err)
 			}
