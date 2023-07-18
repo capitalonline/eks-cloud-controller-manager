@@ -108,18 +108,6 @@ func (n *NodeController) CollectPlayLoad(ctx context.Context) error {
 				Requests: int64(float64(requestMem) / float64(allMem) * 100),
 			},
 			Status: status,
-			//Usage: commoneks.ResourceInfo{
-			//	Cpu:    fmt.Sprintf("%d%%", int64(cpuUsage*100)),
-			//	Memory: fmt.Sprintf("%d%%", int64(memoryUsage*100)),
-			//},
-			//Requests: commoneks.ResourceInfo{
-			//	Cpu:    fmt.Sprintf("%d%%", int64(float64(requestCpu)/float64(allCpu)*100)),
-			//	Memory: fmt.Sprintf("%d%%", int64(float64(requestMem)/float64(allMem)*100)),
-			//},
-			//Limits: commoneks.ResourceInfo{
-			//	Cpu:    fmt.Sprintf("%d%%", int64(float64(limitCpu)/float64(allCpu)*100)),
-			//	Memory: fmt.Sprintf("%d%%", int64(float64(limitMem)/float64(allMem)*100)),
-			//},
 		})
 	}
 	_, err = eks.ModifyClusterLoad(request)
@@ -165,7 +153,7 @@ func (n *NodeController) Update(ctx context.Context) error {
 	}
 	for i := 0; i < len(nodes.Items); i++ {
 		node := nodes.Items[i]
-		details, err := eks.NodeCCMInit(consts.ClusterId, node.GetName())
+		details, err := eks.NodeCCMInit(consts.ClusterId, node.Spec.ProviderID)
 		if err != nil {
 			return err
 		}
@@ -222,6 +210,10 @@ func UpdateNodeTaints(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) 
 	}
 	for i := 0; i < len(node.Spec.Taints); i++ {
 		taint := node.Spec.Taints[i]
+		// 解决偶发bug，ccm启动污点未被去除
+		if taint.Key == "node.cloudprovider.kubernetes.io/uninitialized" {
+			continue
+		}
 		taintMap[taint.Key] = v1.Taint{
 			Key:    taint.Key,
 			Value:  taint.Value,
