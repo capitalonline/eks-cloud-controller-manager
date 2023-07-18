@@ -118,9 +118,7 @@ func (c *Client) sendWithSignatureCds(request cdshttp.Request, response cdshttp.
 		msg := fmt.Sprintf("Fail to get response because %s", err)
 		return errors.NewCdsSDKError("ClientError.NetworkError. Errors.Code:", msg, "")
 	}
-	resp, _ := json.Marshal(response)
 	err = cdshttp.ParseFromHttpResponse(httpResponse, response, request)
-	log.Printf("url：%s  request body:%s    response body: %s", url, requestPayload, string(resp))
 	return err
 }
 
