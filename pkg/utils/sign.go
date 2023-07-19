@@ -6,6 +6,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"net/url"
 	"sort"
 	"strings"
@@ -64,8 +66,15 @@ func getStringToSign(request cdshttp.Request) string {
 	method := request.GetHttpMethod()
 	params := request.GetParams()
 	var paramsKeys sort.StringSlice
+	var p = make(map[string]interface{})
+	bytes, _ := json.Marshal(request)
+	_ = json.Unmarshal(bytes, &p)
 	for k, _ := range params {
 		paramsKeys = append(paramsKeys, k)
+	}
+	for k, v := range p {
+		paramsKeys = append(paramsKeys, k)
+		params[k] = fmt.Sprintf("%v", v)
 	}
 	sort.Sort(paramsKeys)
 	var urlStr string
