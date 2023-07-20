@@ -96,7 +96,8 @@ func (n *NodeController) CollectPlayLoad(ctx context.Context) error {
 			}
 		}
 		request.NodeList = append(request.NodeList, commoneks.ModifyClusterLoadReqNode{
-			NodeId: node.Spec.ProviderID,
+			NodeId:   node.Spec.ProviderID,
+			NodeName: node.Name,
 			Cpu: commoneks.ResourceInfo{
 				Usage:    int64(cpuUsage * 100),
 				Limits:   int64(float64(limitCpu) / float64(allCpu) * 100),

@@ -8,7 +8,7 @@ import (
 	"net/http"
 )
 
-func NodeAddresses(clusterId, nodeId, nodeName string) ([]string, error) {
+func NodeAddresses(clusterId, nodeId string) ([]string, error) {
 	credential := utils.NewCredential(consts.AccessKeyID, consts.AccessKeySecret)
 
 	cpf := profile.NewClientProfile()
@@ -18,7 +18,6 @@ func NodeAddresses(clusterId, nodeId, nodeName string) ([]string, error) {
 	request := eks.NewNodeCCMInitRequest()
 	request.NodeId = nodeId
 	request.ClusterId = clusterId
-	request.NodeName = nodeName
 	response, err := client.NodeCCMInit(request)
 	if err != nil {
 		return nil, err

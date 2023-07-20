@@ -2,17 +2,21 @@ package provider
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/eks"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2"
 )
 
 type Instances struct {
 }
 
 func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.NodeAddress, error) {
-	address, err := eks.NodeAddresses(consts.ClusterId, "", string(name))
+	klog.Info(fmt.Sprintf("NodeAddresses name:%v", name))
+	address, err := eks.NodeAddresses(consts.ClusterId, string(name))
 	if err != nil {
 		return nil, nil
 	}
@@ -26,7 +30,11 @@ func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v
 }
 
 func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID string) ([]v1.NodeAddress, error) {
-	address, err := eks.NodeAddresses(consts.ClusterId, providerID, "")
+	klog.Info(fmt.Sprintf("NodeAddressesByProviderID    providerID:%v", providerID))
+	if providerID == "" {
+		return nil, errors.New("providerID can not be empty")
+	}
+	address, err := eks.NodeAddresses(consts.ClusterId, providerID)
 	if err != nil {
 		return nil, nil
 	}

@@ -132,10 +132,11 @@ type ModifyClusterLoadResponse struct {
 }
 
 type ModifyClusterLoadReqNode struct {
-	NodeId string       `json:"NodeId"`
-	Cpu    ResourceInfo `json:"Cpu"`
-	Memory ResourceInfo `json:"Memory"`
-	Status string       `json:"Status"`
+	NodeId   string       `json:"NodeId"`
+	Cpu      ResourceInfo `json:"Cpu"`
+	Memory   ResourceInfo `json:"Memory"`
+	Status   string       `json:"Status"`
+	NodeName string       `json:"-"`
 }
 
 type ResourceInfo struct {

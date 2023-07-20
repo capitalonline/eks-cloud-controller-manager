@@ -59,13 +59,14 @@ func (r *BaseResponse) ParseErrorFromHTTPResponse(body []byte) (err error) {
 func ParseFromHttpResponse(hr *http.Response, response Response, r Request) (err error) {
 	defer hr.Body.Close()
 	body, err := ioutil.ReadAll(hr.Body)
+	reqParams, _ := json.Marshal(r)
 	if err != nil {
 		msg := fmt.Sprintf("Fail to read response body because %s", err)
 		return errors.NewCdsSDKError("ClientError.IOError", msg, "")
 	}
 	if hr.StatusCode != 200 {
 		fmt.Println(r.GetAction())
-		msg := fmt.Sprintf("Request fail with http status code: %s, with body: %s", hr.Status, body)
+		msg := fmt.Sprintf("Request fail with http status code: %s,request params:%s, with body: %s", hr.Status, string(reqParams), body)
 		return errors.NewCdsSDKError("ClientError.HttpStatusCodeError", msg, "")
 	}
 	//log.Printf("[DEBUG] Response Body=%s", body)
@@ -78,7 +79,7 @@ func ParseFromHttpResponse(hr *http.Response, response Response, r Request) (err
 		msg := fmt.Sprintf("Fail to parse json content: %s, because: %s", body, err)
 		return errors.NewCdsSDKError("ClientError.ParseJsonError", msg, "")
 	}
-	reqbody, _ := json.Marshal(r)
-	log.Printf("action：%s  request body: %s response body: %s", r.GetAction(), string(reqbody), string(body))
+
+	log.Printf("action：%s  request body: %s response body: %s", r.GetAction(), string(reqParams), string(body))
 	return
 }
