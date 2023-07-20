@@ -14,7 +14,7 @@ type Instances struct {
 func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.NodeAddress, error) {
 	address, err := eks.NodeAddresses(consts.ClusterId, "", string(name))
 	if err != nil {
-		return nil, err
+		return nil, nil
 	}
 	nodeAddress := make([]v1.NodeAddress, 0, len(address))
 	for _, item := range address {
@@ -28,7 +28,7 @@ func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v
 func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID string) ([]v1.NodeAddress, error) {
 	address, err := eks.NodeAddresses(consts.ClusterId, providerID, "")
 	if err != nil {
-		return nil, err
+		return nil, nil
 	}
 	nodeAddress := make([]v1.NodeAddress, 0, len(address))
 	for _, item := range address {

@@ -121,7 +121,7 @@ func (n *NodeController) CollectPlayLoad(ctx context.Context) error {
 
 func (n *NodeController) Run(ctx context.Context) error {
 	klog.Info("开始运行run")
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(time.Minute * 3)
 	for {
 		select {
 		case <-ticker.C:
@@ -210,10 +210,6 @@ func UpdateNodeTaints(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) 
 	}
 	for i := 0; i < len(node.Spec.Taints); i++ {
 		taint := node.Spec.Taints[i]
-		// 解决偶发bug，ccm启动污点未被去除
-		if taint.Key == "node.cloudprovider.kubernetes.io/uninitialized" {
-			continue
-		}
 		taintMap[taint.Key] = v1.Taint{
 			Key:    taint.Key,
 			Value:  taint.Value,
