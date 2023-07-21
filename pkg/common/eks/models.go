@@ -82,6 +82,7 @@ type NodeCCMInitResponseData struct {
 	Labels      []Label      `json:"Labels"`
 	Taints      []Taint      `json:"Taints"`
 	Annotations []Annotation `json:"Annotations"`
+	NodeId      string       `json:"NodeId"`
 }
 
 type Label struct {

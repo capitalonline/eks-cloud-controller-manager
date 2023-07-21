@@ -8,7 +8,7 @@ import (
 	"net/http"
 )
 
-func NodeAddresses(clusterId, nodeId string) ([]string, error) {
+func NodeAddresses(clusterId, nodeId string, nodeName string) ([]string, error) {
 	credential := utils.NewCredential(consts.AccessKeyID, consts.AccessKeySecret)
 
 	cpf := profile.NewClientProfile()
@@ -18,6 +18,7 @@ func NodeAddresses(clusterId, nodeId string) ([]string, error) {
 	request := eks.NewNodeCCMInitRequest()
 	request.NodeId = nodeId
 	request.ClusterId = clusterId
+	request.NodeName = nodeName
 	response, err := client.NodeCCMInit(request)
 	if err != nil {
 		return nil, err
@@ -25,7 +26,7 @@ func NodeAddresses(clusterId, nodeId string) ([]string, error) {
 	return []string{response.Data.PrivateIp}, err
 }
 
-func NodeCCMInit(clusterId, nodeId string) (*eks.NodeCCMInitResponse, error) {
+func NodeCCMInit(clusterId, nodeId string, nodeName string) (*eks.NodeCCMInitResponse, error) {
 	credential := utils.NewCredential(consts.AccessKeyID, consts.AccessKeySecret)
 
 	cpf := profile.NewClientProfile()
@@ -35,6 +36,7 @@ func NodeCCMInit(clusterId, nodeId string) (*eks.NodeCCMInitResponse, error) {
 	request := eks.NewNodeCCMInitRequest()
 	request.NodeId = nodeId
 	request.ClusterId = clusterId
+	request.NodeName = nodeName
 	response, err := client.NodeCCMInit(request)
 	if err != nil {
 		return nil, err
