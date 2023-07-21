@@ -97,9 +97,8 @@ type Taint struct {
 }
 
 type Annotation struct {
-	Key    string `json:"Key"`
-	Value  string `json:"Value"`
-	Effect string `json:"Effect"`
+	Key   string `json:"Key"`
+	Value string `json:"Value"`
 }
 
 func (resp *NodeCCMInitResponseData) ToJsonString() string {

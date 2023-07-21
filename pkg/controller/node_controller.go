@@ -177,8 +177,9 @@ func UpdateNode(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) (bool,
 	}
 	labelFlag := UpdateNodeLabels(node, detail)
 	taintFlag := UpdateNodeTaints(node, detail)
-	klog.Info(fmt.Sprintf("更新节点%s,labelFlag:%v,taintFlag:%v", node.Name, labelFlag, taintFlag))
-	return labelFlag || taintFlag, nil
+	annotationFlag := UpdateNodeAnnotations(node, detail)
+	klog.Info(fmt.Sprintf("更新节点%s,labelFlag:%v,taintFlag:%v,annotationFlag:%v", node.Name, labelFlag, taintFlag, annotationFlag))
+	return labelFlag || taintFlag || annotationFlag, nil
 }
 
 // UpdateNodeLabels 更新节点标签
@@ -230,5 +231,27 @@ func UpdateNodeTaints(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) 
 		taints = append(taints, value)
 	}
 	node.Spec.Taints = taints
+	return true
+}
+
+// UpdateNodeAnnotations 修改节点的污点
+func UpdateNodeAnnotations(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) bool {
+	klog.Info(fmt.Sprintf("更新节点%s的注释,原注释：%v, eks注释：%v", node.Name, node.Spec.Taints, detail.Taints))
+	annotations := make(map[string]string)
+	if len(detail.Annotations) == 0 {
+		return false
+	}
+	for i := 0; i < len(detail.Annotations); i++ {
+		annotation := detail.Annotations[i]
+		annotations[annotation.Key] = annotation.Value
+	}
+	if len(node.Annotations) == 0 {
+		node.Annotations = annotations
+		return true
+	}
+	for k, v := range node.Annotations {
+		annotations[k] = v
+	}
+	node.Annotations = annotations
 	return true
 }
