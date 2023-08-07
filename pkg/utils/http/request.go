@@ -15,7 +15,7 @@ const (
 	POST = "POST"
 	GET  = "GET"
 
-	RootDomain = "api.capitalonline.net"
+	RootDomain = ""
 	Path       = "/"
 )
 
