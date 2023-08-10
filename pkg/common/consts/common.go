@@ -12,6 +12,7 @@ var (
 	Az              string
 	ClusterId       string
 	ApiHost         string
+	LbApiHost       string
 )
 
 func init() {
@@ -47,5 +48,10 @@ func init() {
 		ApiHost = apiHost
 	} else {
 		ApiHost = ApiHostAddress
+	}
+	if os.Getenv(EnvLbApiHost) != "" {
+		LbApiHost = os.Getenv(EnvLbApiHost)
+	} else {
+		LbApiHost = LbApiHostAddress
 	}
 }

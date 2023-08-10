@@ -14,7 +14,7 @@ func DescribeVpcSlb(request *lb.DescribeVpcSlbRequest) (*lb.DescribeVpcSlbRespon
 
 	cpf := profile.NewClientProfile()
 	cpf.HttpProfile.ReqMethod = http.MethodGet
-	cpf.HttpProfile.Endpoint = consts.ApiHost
+	cpf.HttpProfile.Endpoint = consts.LbApiHost
 	client, _ := lb.NewClient(credential, consts.Region, cpf)
 	response, err := client.DescribeVpcSlb(request)
 	if err != nil {
@@ -28,7 +28,7 @@ func PackageCreateSlb(request *lb.PackageCreateSlbRequest) (*lb.PackageCreateSlb
 
 	cpf := profile.NewClientProfile()
 	cpf.HttpProfile.ReqMethod = http.MethodPost
-	cpf.HttpProfile.Endpoint = consts.ApiHost
+	cpf.HttpProfile.Endpoint = consts.LbApiHost
 	client, _ := lb.NewClient(credential, consts.Region, cpf)
 	response, err := client.PackageCreateSlb(request)
 	if err != nil {
@@ -42,7 +42,7 @@ func VpcSlbBillingScheme(request *lb.VpcSlbBillingSchemeRequest) (*lb.VpcSlbBill
 
 	cpf := profile.NewClientProfile()
 	cpf.HttpProfile.ReqMethod = http.MethodGet
-	cpf.HttpProfile.Endpoint = consts.ApiHost
+	cpf.HttpProfile.Endpoint = consts.LbApiHost
 	client, _ := lb.NewClient(credential, consts.Region, cpf)
 	response, err := client.VpcSlbBillingScheme(request)
 	if err != nil {
@@ -56,7 +56,7 @@ func DescribeTask(taskId string) (*lb.DescribeTaskResponse, error) {
 
 	cpf := profile.NewClientProfile()
 	cpf.HttpProfile.ReqMethod = http.MethodGet
-	cpf.HttpProfile.Endpoint = consts.ApiHost
+	cpf.HttpProfile.Endpoint = consts.LbApiHost
 	request := lb.NewDescribeTaskRequest()
 	request.TaskId = taskId
 	client, _ := lb.NewClient(credential, consts.Region, cpf)
@@ -72,7 +72,7 @@ func VpcSlbClearListen(slbId string) (*lb.VpcSlbClearListenResponse, error) {
 
 	cpf := profile.NewClientProfile()
 	cpf.HttpProfile.ReqMethod = http.MethodPost
-	cpf.HttpProfile.Endpoint = consts.ApiHost
+	cpf.HttpProfile.Endpoint = consts.LbApiHost
 	request := lb.NewVpcSlbClearListenRequest()
 	request.SlbId = slbId
 	client, _ := lb.NewClient(credential, consts.Region, cpf)

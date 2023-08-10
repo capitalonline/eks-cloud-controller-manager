@@ -9,7 +9,8 @@ const (
 const ProviderName = "cdscloud"
 
 const (
-	ApiHostAddress = "api.capitalonline.net"
+	ApiHostAddress   = "api.capitalonline.net"
+	LbApiHostAddress = "cdsapi.capitalonline.net"
 )
 
 const (
@@ -33,6 +34,7 @@ const (
 	EnvClusterId       = "CDS_CLUSTER_ID"
 	EnvAz              = "CDS_CLUSTER_AZ"
 	SCHEMA             = "CDS_API_SCHEMA"
+	EnvLbApiHost       = "CDS_LB_API_HOST"
 )
 
 const (
