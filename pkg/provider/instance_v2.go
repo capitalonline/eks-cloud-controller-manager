@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/capitalonline/eks-cloud-controller-manager/pkg/api"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
-	"github.com/capitalonline/eks-cloud-controller-manager/pkg/eks"
 	v1 "k8s.io/api/core/v1"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
@@ -16,9 +16,9 @@ type InstancesV2 struct {
 
 func (i *InstancesV2) InstanceExists(ctx context.Context, node *v1.Node) (bool, error) {
 	klog.Info(fmt.Sprintf("InstanceExists providerID:%v", node.Spec.ProviderID))
-	resp, err := eks.NodeCCMInit(consts.ClusterId, node.Spec.ProviderID, "")
+	resp, err := api.NodeCCMInit(consts.ClusterId, node.Spec.ProviderID, "")
 	if err != nil {
-		return false, err
+		return false, nil
 	}
 	if resp.Data.PrivateIp == "" {
 		return false, nil

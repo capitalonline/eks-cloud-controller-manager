@@ -1,4 +1,4 @@
-package eks
+package api
 
 import (
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"

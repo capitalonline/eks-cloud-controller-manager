@@ -1,4 +1,4 @@
-package eks
+package lb
 
 import (
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
@@ -19,31 +19,31 @@ func NewClient(credential *utils.Credential, region string, clientProfile *profi
 	return
 }
 
-func NewCreateLbInstanceRequest() (request *CreateLbInstanceRequest) {
-	request = &CreateLbInstanceRequest{
+func NewPackageCreateSlbRequest() (request *PackageCreateSlbRequest) {
+	request = &PackageCreateSlbRequest{
 		BaseRequest: &cdshttp.BaseRequest{},
 	}
-	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionCreateLb)
+	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionPackageCreateSlb)
 	request.SetDomain(consts.ApiHost)
 	return
 }
 
-func NewCreateLbInstanceResponse() (response *CreateLbInstanceResponse) {
-	response = &CreateLbInstanceResponse{BaseResponse: &cdshttp.BaseResponse{}}
+func NewPackageCreateSlbResponse() (response *PackageCreateSlbResponse) {
+	response = &PackageCreateSlbResponse{BaseResponse: &cdshttp.BaseResponse{}}
 	return
 }
 
-func (c *Client) CreateLbInstance(request *CreateLbInstanceRequest) (response *CreateLbInstanceResponse, err error) {
+func (c *Client) PackageCreateSlb(request *PackageCreateSlbRequest) (response *PackageCreateSlbResponse, err error) {
 	if request == nil {
-		request = NewCreateLbInstanceRequest()
+		request = NewPackageCreateSlbRequest()
 	}
-	response = NewCreateLbInstanceResponse()
+	response = NewPackageCreateSlbResponse()
 	err = c.Send(request, response)
 	return
 }
 
-func NewDescribeLbInstanceRequest() (request *DescribeLbInstanceRequest) {
-	request = &DescribeLbInstanceRequest{
+func NewDescribeVpcSlbRequest() (request *DescribeVpcSlbRequest) {
+	request = &DescribeVpcSlbRequest{
 		BaseRequest: &cdshttp.BaseRequest{},
 	}
 	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionDescribeLbInstance)
@@ -51,49 +51,49 @@ func NewDescribeLbInstanceRequest() (request *DescribeLbInstanceRequest) {
 	return
 }
 
-func NewDescribeLbInstanceResponse() (response *DescribeLbInstanceResponse) {
-	response = &DescribeLbInstanceResponse{
+func NewDescribeVpcSlbResponse() (response *DescribeVpcSlbResponse) {
+	response = &DescribeVpcSlbResponse{
 		BaseResponse: &cdshttp.BaseResponse{},
 	}
 	return
 }
 
-func (c *Client) DescribeLbInstance(request *DescribeLbInstanceRequest) (response *DescribeLbInstanceResponse, err error) {
+func (c *Client) DescribeVpcSlb(request *DescribeVpcSlbRequest) (response *DescribeVpcSlbResponse, err error) {
 	if request == nil {
-		request = NewDescribeLbInstanceRequest()
+		request = NewDescribeVpcSlbRequest()
 	}
-	response = NewDescribeLbInstanceResponse()
+	response = NewDescribeVpcSlbResponse()
 	err = c.Send(request, response)
 	return
 }
 
-func NewUpdateLbInstanceRequest() (request *UpdateLbInstanceRequest) {
-	request = &UpdateLbInstanceRequest{
+func NewVpcSlbUpdateListenRequest() (request *VpcSlbUpdateListenRequest) {
+	request = &VpcSlbUpdateListenRequest{
 		BaseRequest: &cdshttp.BaseRequest{},
 	}
-	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionUpdateLbInstance)
+	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionVpcSlbUpdateListen)
 	request.SetDomain(consts.ApiHost)
 	return
 }
 
-func NewUpdateLbInstanceResponse() (response *UpdateLbInstanceResponse) {
-	response = &UpdateLbInstanceResponse{
+func NewVpcSlbUpdateListenResponse() (response *VpcSlbUpdateListenResponse) {
+	response = &VpcSlbUpdateListenResponse{
 		BaseResponse: &cdshttp.BaseResponse{},
 	}
 	return
 }
 
-func (c *Client) UpdateLbInstance(request *UpdateLbInstanceRequest) (response *UpdateLbInstanceResponse, err error) {
+func (c *Client) VpcSlbUpdateListen(request *VpcSlbUpdateListenRequest) (response *VpcSlbUpdateListenResponse, err error) {
 	if request == nil {
-		request = NewUpdateLbInstanceRequest()
+		request = NewVpcSlbUpdateListenRequest()
 	}
-	response = NewUpdateLbInstanceResponse()
+	response = NewVpcSlbUpdateListenResponse()
 	err = c.Send(request, response)
 	return
 }
 
-func NewDescribeTaskStatusRequest() (request *DescribeTaskStatusRequest) {
-	request = &DescribeTaskStatusRequest{
+func NewDescribeTaskRequest() (request *DescribeTaskRequest) {
+	request = &DescribeTaskRequest{
 		BaseRequest: &cdshttp.BaseRequest{},
 	}
 	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionDescribeLbTaskStatus)
@@ -101,43 +101,93 @@ func NewDescribeTaskStatusRequest() (request *DescribeTaskStatusRequest) {
 	return
 }
 
-func NewDescribeTaskStatusResponse() (response *DescribeTaskStatusResponse) {
-	response = &DescribeTaskStatusResponse{
+func NewDescribeTaskResponse() (response *DescribeTaskResponse) {
+	response = &DescribeTaskResponse{
 		BaseResponse: &cdshttp.BaseResponse{},
 	}
 	return
 }
 
-func (c *Client) DescribeTaskStatus(request *DescribeTaskStatusRequest) (response *DescribeTaskStatusResponse, err error) {
+func (c *Client) DescribeTask(request *DescribeTaskRequest) (response *DescribeTaskResponse, err error) {
 	if request == nil {
-		request = NewDescribeTaskStatusRequest()
+		request = NewDescribeTaskRequest()
 	}
-	response = NewDescribeTaskStatusResponse()
+	response = NewDescribeTaskResponse()
 	err = c.Send(request, response)
 	return
 }
 
-func NewDeleteLbListenersRequest() (request *DeleteLbListenersRequest) {
-	request = &DeleteLbListenersRequest{
+//func NewDeleteLbListenersRequest() (request *DeleteLbListenersRequest) {
+//	request = &DeleteLbListenersRequest{
+//		BaseRequest: &cdshttp.BaseRequest{},
+//	}
+//	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionDeleteLbInstance)
+//	request.SetDomain(consts.ApiHost)
+//	return
+//}
+//
+//func NewDeleteLbListenersResponse() (response *DeleteLbListenersResponse) {
+//	response = &DeleteLbListenersResponse{
+//		BaseResponse: &cdshttp.BaseResponse{},
+//	}
+//	return
+//}
+//
+//func (c *Client) DeleteLbListeners(request *DeleteLbListenersRequest) (response *DeleteLbListenersResponse, err error) {
+//	if request == nil {
+//		request = NewDeleteLbListenersRequest()
+//	}
+//	response = NewDeleteLbListenersResponse()
+//	err = c.Send(request, response)
+//	return
+//}
+
+func NewVpcSlbBillingSchemeRequest() (request *VpcSlbBillingSchemeRequest) {
+	request = &VpcSlbBillingSchemeRequest{
 		BaseRequest: &cdshttp.BaseRequest{},
 	}
-	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionDeleteLbInstance)
+	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionDescribeLbTaskStatus)
 	request.SetDomain(consts.ApiHost)
 	return
 }
 
-func NewDeleteLbListenersResponse() (response *DeleteLbListenersResponse) {
-	response = &DeleteLbListenersResponse{
+func NewVpcSlbBillingSchemeResponse() (response *VpcSlbBillingSchemeResponse) {
+	response = &VpcSlbBillingSchemeResponse{
 		BaseResponse: &cdshttp.BaseResponse{},
 	}
 	return
 }
 
-func (c *Client) DeleteLbListeners(request *DeleteLbListenersRequest) (response *DeleteLbListenersResponse, err error) {
+func (c *Client) VpcSlbBillingScheme(request *VpcSlbBillingSchemeRequest) (response *VpcSlbBillingSchemeResponse, err error) {
 	if request == nil {
-		request = NewDeleteLbListenersRequest()
+		request = NewVpcSlbBillingSchemeRequest()
 	}
-	response = NewDeleteLbListenersResponse()
+	response = NewVpcSlbBillingSchemeResponse()
+	err = c.Send(request, response)
+	return
+}
+
+func NewVpcSlbClearListenRequest() (request *VpcSlbClearListenRequest) {
+	request = &VpcSlbClearListenRequest{
+		BaseRequest: &cdshttp.BaseRequest{},
+	}
+	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionVpcSlbClearListen)
+	request.SetDomain(consts.ApiHost)
+	return
+}
+
+func NewVpcSlbClearListenResponse() (response *VpcSlbClearListenResponse) {
+	response = &VpcSlbClearListenResponse{
+		BaseResponse: &cdshttp.BaseResponse{},
+	}
+	return
+}
+
+func (c *Client) VpcSlbClearListen(request *VpcSlbClearListenRequest) (response *VpcSlbClearListenResponse, err error) {
+	if request == nil {
+		request = NewVpcSlbClearListenRequest()
+	}
+	response = NewVpcSlbClearListenResponse()
 	err = c.Send(request, response)
 	return
 }

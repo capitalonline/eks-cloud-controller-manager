@@ -16,11 +16,13 @@ const (
 	ActionDescribeEKSNode      = "DescribeEKSNode"    // 查询节点
 	ActionNodeCCMInit          = "NodeCCMInit"        // 初始化ccm
 	ActionModifyClusterLoad    = "ModifyClusterLoad"  // 更新节点负载
-	ActionCreateLb             = "CreateLb"           // 创建负载均衡实例
-	ActionDescribeLbInstance   = "DescribeLbInstance" // 查询负载均衡实例
-	ActionUpdateLbInstance     = "UpdateLbInstance"   // 更新负载均衡实例
+	ActionPackageCreateSlb     = "PackageCreateSlb"   // 创建负载均衡实例
+	ActionDescribeLbInstance   = "DescribeVpcSlb"     // 查询负载均衡实例
+	ActionVpcSlbUpdateListen   = "VpcSlbUpdateListen" // 更新负载均衡实例
 	ActionDeleteLbInstance     = "DeleteLbInstance"   // 删除负载均衡实例
-	ActionDescribeLbTaskStatus = "DescribeTaskStatus" // 查询任务状态
+	ActionDescribeLbTaskStatus = "DescribeTask"       // 查询任务状态
+	ActionVpcSlbClearListen    = "VpcSlbClearListen"  // 清空监听
+	ActionVpcSlbBillingScheme  = "VpcSlbBillingScheme"
 )
 
 const (
@@ -31,4 +33,8 @@ const (
 	EnvClusterId       = "CDS_CLUSTER_ID"
 	EnvAz              = "CDS_CLUSTER_AZ"
 	SCHEMA             = "CDS_API_SCHEMA"
+)
+
+const (
+	LbRequestSuccess = "OK"
 )

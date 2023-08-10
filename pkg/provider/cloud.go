@@ -22,7 +22,7 @@ func (cloud *Cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuild
 }
 
 func (cloud *Cloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
-	return &LoadBalancer{}, false
+	return &LoadBalancer{}, true
 }
 
 func (cloud *Cloud) Instances() (cloudprovider.Instances, bool) {

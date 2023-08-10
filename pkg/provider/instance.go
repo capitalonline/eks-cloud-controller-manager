@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/capitalonline/eks-cloud-controller-manager/pkg/api"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
-	"github.com/capitalonline/eks-cloud-controller-manager/pkg/eks"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
@@ -16,7 +16,7 @@ type Instances struct {
 
 func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.NodeAddress, error) {
 	klog.Info(fmt.Sprintf("NodeAddresses name:%v", name))
-	address, err := eks.NodeAddresses(consts.ClusterId, "", string(name))
+	address, err := api.NodeAddresses(consts.ClusterId, "", string(name))
 	if err != nil {
 		return nil, nil
 	}
@@ -34,7 +34,7 @@ func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 	if providerID == "" {
 		return nil, errors.New("providerID can not be empty")
 	}
-	address, err := eks.NodeAddresses(consts.ClusterId, providerID, "")
+	address, err := api.NodeAddresses(consts.ClusterId, providerID, "")
 	if err != nil {
 		return nil, nil
 	}
@@ -49,7 +49,7 @@ func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 
 func (i *Instances) InstanceID(ctx context.Context, nodeName types.NodeName) (string, error) {
 	klog.Info(fmt.Sprintf("InstanceID nodeName:%v", nodeName))
-	resp, err := eks.NodeCCMInit(consts.ClusterId, "", string(nodeName))
+	resp, err := api.NodeCCMInit(consts.ClusterId, "", string(nodeName))
 	if err != nil {
 		return "", err
 	}
@@ -59,7 +59,7 @@ func (i *Instances) InstanceID(ctx context.Context, nodeName types.NodeName) (st
 func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (string, error) {
 	klog.Info(fmt.Sprintf("InstanceID name:%v", name))
 
-	resp, err := eks.NodeCCMInit(consts.ClusterId, "", string(name))
+	resp, err := api.NodeCCMInit(consts.ClusterId, "", string(name))
 	if err != nil {
 		return "", err
 	}
@@ -74,7 +74,7 @@ func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (stri
 
 func (i *Instances) InstanceTypeByProviderID(ctx context.Context, providerID string) (string, error) {
 	klog.Info(fmt.Sprintf("InstanceTypeByProviderID providerID:%v", providerID))
-	resp, err := eks.NodeCCMInit(consts.ClusterId, providerID, "")
+	resp, err := api.NodeCCMInit(consts.ClusterId, providerID, "")
 	if err != nil {
 		return "", err
 	}
@@ -97,9 +97,9 @@ func (i *Instances) CurrentNodeName(ctx context.Context, hostname string) (types
 
 func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID string) (bool, error) {
 	klog.Info(fmt.Sprintf("InstanceExistsByProviderID providerID:%v", providerID))
-	address, err := eks.NodeCCMInit(consts.ClusterId, providerID, "")
+	address, err := api.NodeCCMInit(consts.ClusterId, providerID, "")
 	if err != nil {
-		return false, err
+		return true, err
 	}
 	if address.Data.NodeId == "" {
 		return false, nil

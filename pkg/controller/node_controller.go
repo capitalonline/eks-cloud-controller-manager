@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/capitalonline/eks-cloud-controller-manager/pkg/api"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
 	commoneks "github.com/capitalonline/eks-cloud-controller-manager/pkg/common/eks"
-	"github.com/capitalonline/eks-cloud-controller-manager/pkg/eks"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -111,7 +111,7 @@ func (n *NodeController) CollectPlayLoad(ctx context.Context) error {
 			Status: status,
 		})
 	}
-	_, err = eks.ModifyClusterLoad(request)
+	_, err = api.ModifyClusterLoad(request)
 	if err != nil {
 		klog.Info("同步节点负载失败，err:", err)
 		return err
@@ -154,7 +154,7 @@ func (n *NodeController) Update(ctx context.Context) error {
 	}
 	for i := 0; i < len(nodes.Items); i++ {
 		node := nodes.Items[i]
-		details, err := eks.NodeCCMInit(consts.ClusterId, node.Spec.ProviderID, "")
+		details, err := api.NodeCCMInit(consts.ClusterId, node.Spec.ProviderID, "")
 		if err != nil {
 			return err
 		}
