@@ -7,11 +7,11 @@ import (
 
 type PackageCreateSlbRequest struct {
 	*cdshttp.BaseRequest
-	UserId            string                        `json:"UserId"`
-	CustomerId        string                        `json:"CustomerId"`
+	UserId            string                        `json:"-"`
+	CustomerId        string                        `json:"-"`
 	VpcId             string                        `json:"VpcId"`
 	AvailableZoneCode string                        `json:"AvailableZoneCode"`
-	Level             int                           `json:"Level"`
+	Level             int                           `json:"Level,omitempty"`
 	SlbInfo           PackageCreateSlbInfo          `json:"SlbInfo"`
 	BandwidthInfo     PackageCreateSlbBandwidthInfo `json:"BandwidthInfo"`
 }
@@ -20,7 +20,7 @@ type PackageCreateSlbInfo struct {
 	BillingSchemeId string `json:"BillingSchemeId"`
 	NetType         string `json:"NetType"`
 	Name            string `json:"Name"`
-	SubjectId       int    `json:"SubjectId"`
+	SubjectId       int    `json:"SubjectId,omitempty"`
 }
 
 type PackageCreateSlbBandwidthInfo struct {
@@ -28,10 +28,10 @@ type PackageCreateSlbBandwidthInfo struct {
 	BillingSchemeId string `json:"BillingSchemeId"`
 	Qos             int    `json:"Qos"`
 	Type            string `json:"Type"`
-	SubjectId       int    `json:"SubjectId"`
-	IsAutoRenewal   bool   `json:"IsAutoRenewal"`
-	IsToMonth       bool   `json:"IsToMonth"`
-	Duration        int    `json:"Duration"`
+	SubjectId       int    `json:"SubjectId,omitempty"`
+	IsAutoRenewal   bool   `json:"IsAutoRenewal,omitempty"`
+	IsToMonth       bool   `json:"IsToMonth,omitempty"`
+	Duration        int    `json:"Duration,omitempty"`
 	EipCount        int    `json:"EipCount"`
 }
 
@@ -46,16 +46,15 @@ func (r *PackageCreateSlbRequest) FromJsonString(s string) error {
 
 type PackageCreateSlbResponse struct {
 	*cdshttp.BaseResponse
-	Data      []PackageCreateSlbResponseData `json:"Data"`
-	Code      string                         `json:"Code"`
-	Message   string                         `json:"Message"`
-	Success   interface{}                    `json:"Success"`
-	RequestId string                         `json:"RequestId"`
+	Data      PackageCreateSlbResponseData `json:"Data"`
+	Code      string                       `json:"Code"`
+	Message   string                       `json:"Message"`
+	RequestId string                       `json:"RequestId"`
+	TaskId    string                       `json:"TaskId"`
 }
 
 type PackageCreateSlbResponseData struct {
-	SlbId  string `json:"SlbId"`
-	TaskId string `json:"TaskId"`
+	SlbId string `json:"SlbId"`
 }
 
 func (r *PackageCreateSlbResponse) ToJsonString() string {
@@ -85,32 +84,39 @@ func (r *DescribeVpcSlbRequest) FromJsonString(s string) error {
 type DescribeVpcSlbResponse struct {
 	*cdshttp.BaseResponse
 
-	Data      []DescribeVpcSlbResponseData `json:"Data"`
-	Code      string                       `json:"Code"`
-	Message   string                       `json:"Message"`
-	Success   interface{}                  `json:"Success"`
-	RequestId string                       `json:"RequestId"`
+	Data      DescribeVpcSlbResponseSlbInfo `json:"Data"`
+	Code      string                        `json:"Code"`
+	Message   string                        `json:"Message"`
+	RequestId string                        `json:"RequestId"`
 }
 
-type DescribeVpcSlbResponseData struct {
-	SlbInfo DescribeVpcSlbResponseSlbInfo `json:"SlbInfo"`
-}
+//type DescribeVpcSlbResponseData struct {
+//	SlbInfo DescribeVpcSlbResponseSlbInfo `json:"SlbInfo"`
+//}
 
 type DescribeVpcSlbResponseSlbInfo struct {
-	SlbId         string                          `json:"SlbId"`
-	SlbName       string                          `json:"SlbName"`
-	SlbStatus     string                          `json:"SlbStatus"`
+	//SlbId         string                          `json:"SlbId"`
+	//SlbName       string                          `json:"SlbName"`
+	//SlbStatus     string                          `json:"SlbStatus"`
+	//BandwidthId   string                          `json:"BandwidthId"`
+	//BandwidthName string                          `json:"BandwidthName"`
+	//Qos           int                             `json:"Qos"`
+	//VipList       []DescribeVpcSlbResponseVipInfo `json:"VipList"`
+
 	BandwidthId   string                          `json:"BandwidthId"`
 	BandwidthName string                          `json:"BandwidthName"`
 	Qos           int                             `json:"Qos"`
+	SlbId         string                          `json:"SlbId"`
+	SlbName       string                          `json:"SlbName"`
+	SlbStatus     string                          `json:"SlbStatus"`
 	VipList       []DescribeVpcSlbResponseVipInfo `json:"VipList"`
 }
 
 type DescribeVpcSlbResponseVipInfo struct {
-	VipId      string                           `json:"VipId"`
-	VipIp      string                           `json:"VipIp"`
-	VipStatus  string                           `json:"VipStatus"`
-	ListenInfo DescribeVpcSlbResponseListenInfo `json:"ListenInfo"`
+	ListenList interface{} `json:"ListenList"`
+	Vip        string      `json:"Vip"`
+	VipId      string      `json:"VipId"`
+	VipType    string      `json:"VipType"`
 }
 
 type DescribeVpcSlbResponseListenInfo struct {
@@ -136,21 +142,29 @@ func (r *DescribeVpcSlbResponse) FromJsonString(s string) error {
 
 type VpcSlbUpdateListenRequest struct {
 	*cdshttp.BaseRequest
-	SlbId      string                            `json:"SlbId"`
-	Platform   string                            `json:"Platform"`
-	ListenList []VpcSlbUpdateListenRequestListen `json:"ListenList"`
+	SlbId        string                            `json:"SlbId"`
+	Platform     string                            `json:"Platform"`
+	ListenList   []VpcSlbUpdateListenRequestListen `json:"ListenList"`
+	OperatorType string                            `json:"OperatorType"`
 }
 
 type VpcSlbUpdateListenRequestListen struct {
 	ListenIp       string                        `json:"ListenIp"`
 	ListenPort     int                           `json:"ListenPort"`
 	ListenProtocol string                        `json:"ListenProtocol"`
+	Scheduler      string                        `json:"Scheduler"`
+	ListenName     string                        `json:"ListenName"`
+	Timeout        int                           `json:"Timeout"`
 	RsList         []VpcSlbUpdateListenRequestRs `json:"RsList"`
 }
 
 type VpcSlbUpdateListenRequestRs struct {
-	RsIp   string `json:"RsIp"`
-	RsPort string `json:"RsPort"`
+	RsId    string `json:"RsId"`
+	RsName  string `json:"RsName"`
+	RsType  string `json:"RsType"`
+	RsWanIp string `json:"RsWanIp"`
+	RsLanIp string `json:"RsLanIp"`
+	RsPort  int    `json:"RsPort"`
 }
 
 func (r *VpcSlbUpdateListenRequest) ToJsonString() string {
@@ -164,15 +178,14 @@ func (r *VpcSlbUpdateListenRequest) FromJsonString(s string) error {
 
 type VpcSlbUpdateListenResponse struct {
 	*cdshttp.BaseResponse
-	Data      []VpcSlbUpdateListenResponseData `json:"Data"`
-	Code      string                           `json:"Code"`
-	Message   string                           `json:"Message"`
-	Success   interface{}                      `json:"Success"`
-	RequestId string                           `json:"RequestId"`
+	Data      VpcSlbUpdateListenResponseData `json:"Data"`
+	Code      string                         `json:"Code"`
+	Message   string                         `json:"Message"`
+	RequestId string                         `json:"RequestId"`
+	TaskId    string                         `json:"TaskId"`
 }
 
 type VpcSlbUpdateListenResponseData struct {
-	TaskId string `json:"TaskId"`
 }
 
 func (r *VpcSlbUpdateListenResponse) ToJsonString() string {
@@ -200,15 +213,14 @@ func (r *VpcSlbClearListenRequest) FromJsonString(s string) error {
 
 type VpcSlbClearListenResponse struct {
 	*cdshttp.BaseResponse
-	Data      []VpcSlbClearListenResponseData `json:"Data"`
-	Code      string                          `json:"Code"`
-	Message   string                          `json:"Message"`
-	Success   interface{}                     `json:"Success"`
-	RequestId string                          `json:"RequestId"`
+	Data      VpcSlbClearListenResponseData `json:"Data"`
+	Code      string                        `json:"Code"`
+	Message   string                        `json:"Message"`
+	RequestId string                        `json:"RequestId"`
+	TaskId    string                        `json:"TaskId"`
 }
 
 type VpcSlbClearListenResponseData struct {
-	TaskId string `json:"TaskId"`
 }
 
 func (r *VpcSlbClearListenResponse) ToJsonString() string {
@@ -236,15 +248,15 @@ func (r *DescribeTaskRequest) FromJsonString(s string) error {
 
 type DescribeTaskResponse struct {
 	*cdshttp.BaseResponse
-	Data      []DescribeTaskResponseData `json:"Data"`
-	Code      string                     `json:"Code"`
-	Message   string                     `json:"Message"`
-	Success   interface{}                `json:"Success"`
-	RequestId string                     `json:"RequestId"`
+	Data      DescribeTaskResponseData `json:"Data"`
+	Code      string                   `json:"Code"`
+	Message   string                   `json:"Message"`
+	RequestId string                   `json:"RequestId"`
 }
 
 type DescribeTaskResponseData struct {
 	TaskStatus string `json:"TaskStatus"`
+	ResourceId string `json:"ResourceId"`
 }
 
 func (r *DescribeTaskResponse) ToJsonString() string {
@@ -277,7 +289,6 @@ type VpcSlbBillingSchemeResponse struct {
 	Data      []VpcSlbBillingSchemeResponseData `json:"Data"`
 	Code      string                            `json:"Code"`
 	Message   string                            `json:"Message"`
-	Success   interface{}                       `json:"Success"`
 	RequestId string                            `json:"RequestId"`
 }
 
@@ -308,5 +319,63 @@ func (r *VpcSlbBillingSchemeResponse) ToJsonString() string {
 }
 
 func (r *VpcSlbBillingSchemeResponse) FromJsonString(s string) error {
+	return json.Unmarshal([]byte(s), &r)
+}
+
+type BandwidthBillingSchemeRequest struct {
+	*cdshttp.BaseRequest
+	RegionCode        string `json:"RegionCode"`
+	AvailableZoneCode string `json:"AvailableZoneCode"`
+	Type              string `json:"Type"`
+	VpcId             string `json:"VpcId"`
+}
+
+func (r *BandwidthBillingSchemeRequest) ToJsonString() string {
+	b, _ := json.Marshal(r)
+	return string(b)
+}
+
+func (r *BandwidthBillingSchemeRequest) FromJsonString(s string) error {
+	return json.Unmarshal([]byte(s), &r)
+}
+
+type BandwidthBillingSchemeResponse struct {
+	*cdshttp.BaseResponse
+
+	Code    string                       `json:"Code"`
+	Data    []BandwidthBillingSchemeData `json:"Data"`
+	Message string                       `json:"Message"`
+}
+
+type BandwidthBillingSchemeData struct {
+	BillingScheme []BandwidthBillingScheme `json:"BillingScheme"`
+	ConfId        int                      `json:"ConfId"`
+	ConfName      string                   `json:"ConfName"`
+}
+
+type BandwidthBillingScheme struct {
+	BillingCycleId    string                              `json:"BillingCycleId"`
+	BillingItems      []BandwidthBillingSchemeBillingItem `json:"BillingItems"`
+	BillingMethod     string                              `json:"BillingMethod"`
+	BillingSchemeId   string                              `json:"BillingSchemeId"`
+	BillingSchemeName string                              `json:"BillingSchemeName"`
+	BillingType       string                              `json:"BillingType"`
+	GoodsId           int                                 `json:"GoodsId"`
+}
+
+type BandwidthBillingSchemeBillingItem struct {
+	AttrId string `json:"AttrId"`
+	Id     string `json:"Id"`
+	Key    string `json:"Key"`
+	Name   string `json:"Name"`
+	Size   int    `json:"Size"`
+}
+
+func (r *BandwidthBillingSchemeResponse) ToJsonString() string {
+	b, _ := json.Marshal(r)
+	return string(b)
+}
+
+func (r *BandwidthBillingSchemeResponse) FromJsonString(s string) error {
 	return json.Unmarshal([]byte(s), &r)
 }

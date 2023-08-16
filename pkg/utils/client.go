@@ -37,6 +37,9 @@ func (c *Client) Send(request cdshttp.Request, response cdshttp.Response) (err e
 			domain = domain + "/" + request.GetService()
 		}
 		request.SetDomain(domain)
+	} else {
+		domain := request.GetDomain() + "/" + request.GetService()
+		request.SetDomain(domain)
 	}
 
 	if request.GetHttpMethod() == "" {
@@ -89,6 +92,7 @@ func (c *Client) sendWithSignatureCds(request cdshttp.Request, response cdshttp.
 	if httpRequestMethod == "POST" {
 		// 只对请求路径进行签名，Body 参与签名
 		err = signRequest(request, c.credential, c.signMethod)
+
 		canonicalQueryString = cdshttp.GetUrlQueriesEncoded(request.GetParams())
 		if err != nil {
 			return err

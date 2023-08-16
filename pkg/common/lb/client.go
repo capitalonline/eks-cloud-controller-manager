@@ -146,7 +146,7 @@ func NewVpcSlbBillingSchemeRequest() (request *VpcSlbBillingSchemeRequest) {
 	request = &VpcSlbBillingSchemeRequest{
 		BaseRequest: &cdshttp.BaseRequest{},
 	}
-	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionDescribeLbTaskStatus)
+	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionVpcSlbBillingScheme)
 	request.SetDomain(consts.ApiHost)
 	return
 }
@@ -188,6 +188,31 @@ func (c *Client) VpcSlbClearListen(request *VpcSlbClearListenRequest) (response 
 		request = NewVpcSlbClearListenRequest()
 	}
 	response = NewVpcSlbClearListenResponse()
+	err = c.Send(request, response)
+	return
+}
+
+func NewBandwidthBillingSchemeRequest() (request *BandwidthBillingSchemeRequest) {
+	request = &BandwidthBillingSchemeRequest{
+		BaseRequest: &cdshttp.BaseRequest{},
+	}
+	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionVpcBandwidthBillingScheme)
+	request.SetDomain(consts.ApiHost)
+	return
+}
+
+func NewBandwidthBillingSchemeResponse() (response *BandwidthBillingSchemeResponse) {
+	response = &BandwidthBillingSchemeResponse{
+		BaseResponse: &cdshttp.BaseResponse{},
+	}
+	return
+}
+
+func (c *Client) BandwidthBillingScheme(request *BandwidthBillingSchemeRequest) (response *BandwidthBillingSchemeResponse, err error) {
+	if request == nil {
+		request = NewBandwidthBillingSchemeRequest()
+	}
+	response = NewBandwidthBillingSchemeResponse()
 	err = c.Send(request, response)
 	return
 }

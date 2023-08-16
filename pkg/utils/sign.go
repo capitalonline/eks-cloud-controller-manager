@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"sort"
 	"strings"
@@ -67,8 +68,10 @@ func getStringToSign(request cdshttp.Request) string {
 	params := request.GetParams()
 	var paramsKeys sort.StringSlice
 	var p = make(map[string]interface{})
-	bytes, _ := json.Marshal(request)
-	_ = json.Unmarshal(bytes, &p)
+	if method == http.MethodGet {
+		bytes, _ := json.Marshal(request)
+		_ = json.Unmarshal(bytes, &p)
+	}
 	for k, _ := range params {
 		paramsKeys = append(paramsKeys, k)
 	}
