@@ -25,11 +25,14 @@ const (
 	AnnotationLbEip        = "service.beta.kubernetes.io/cds-load-balancer-eip"
 	AnnotationLbAlgorithm  = "service.beta.kubernetes.io/cds-load-balancer-algorithm"
 	AnnotationLbListen     = "service.eks.listen"
-	LbNetTypePublic        = "public"
+	LbNetTypeWan           = "wan"
 	LbBillingMethodCostPay = "0" // 按需计费
 	LabelNodeAz            = "node.kubernetes.io/node.az"
 	LbTaskSuccess          = "success"
 	LbTakError             = "error"
+	NetTypeWan             = "wan"
+	NetTypeWanLan          = "wan_lan"
+	BillingType            = "number"
 )
 
 const (
@@ -38,10 +41,10 @@ const (
 	LBSpecSuper    = "super"    // 超强型
 	LBSpecExtreme  = "extreme"  // 至强型
 
-	LBSpecNameStandard = "标准型I"
-	LBSpecNameHigh     = "高阶型I"
-	LBSpecNameSuper    = "超强型I"
-	LBSpecNameExtreme  = "至强型I"
+	LBSpecNameStandard = "标准型Ⅰ"
+	LBSpecNameHigh     = "高阶型Ⅰ"
+	LBSpecNameSuper    = "超强型Ⅰ"
+	LBSpecNameExtreme  = "至强型Ⅰ"
 )
 
 const (
@@ -103,11 +106,15 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 	request := lb.NewDescribeVpcSlbRequest()
 	request.SlbName = service.Name + service.Namespace + string(service.UID)
 	response, err := api.DescribeVpcSlb(request)
-	if err != nil {
+	// 调用接口有问题，接口没返回json
+	if err != nil && response == nil {
 		return nil, err
 	}
+	if response == nil {
+		return nil, errors.New("查询slb失败")
+	}
 	// 接口请求返回异常
-	if response.Code != consts.LbRequestSuccess {
+	if response.Code != consts.LbRequestSuccess && response.Code != consts.ErrorSlbNotFound {
 		klog.Error(fmt.Sprintf("查询slb失败，response: %#v", response))
 		return nil, errors.New(response.Message)
 	}
@@ -186,19 +193,20 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service, nodes
 	}
 	randomInt := rand.Intn(len(azList))
 	var azCode = azList[randomInt]
+	azCode = "CN_DaBieShan_A"
 	// 查询计费方案
-	schemaReq := lb.NewVpcSlbBillingSchemeRequest()
-	schemaReq.AvailableZoneCode = azCode
-	schemaReq.NetType = LbNetTypePublic
-	schemaReq.BillingMethod = LbBillingMethodCostPay
-	schemaResp, err := api.VpcSlbBillingScheme(schemaReq)
+	lsbSchemaReq := lb.NewVpcSlbBillingSchemeRequest()
+	lsbSchemaReq.AvailableZoneCode = azCode
+	lsbSchemaReq.NetType = LbNetTypeWan
+	lsbSchemaReq.BillingMethod = LbBillingMethodCostPay
+	lsbSchema, err := api.VpcSlbBillingScheme(lsbSchemaReq)
 	if err != nil {
 		return "", err
 	}
 	var billingSchemeId string
 
-	for i := 0; i < len(schemaResp.Data); i++ {
-		schema := schemaResp.Data[i]
+	for i := 0; i < len(lsbSchema.Data); i++ {
+		schema := lsbSchema.Data[i]
 		if schema.ConfName == lbSpecMap[lbSpec] {
 			billingSchemeId = schema.BillingSchemeId
 			break
@@ -215,6 +223,35 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service, nodes
 	request.AvailableZoneCode = azCode
 	// 当前仅支持4层
 	request.Level = int(lbType)
+	request.SlbInfo = lb.PackageCreateSlbInfo{
+		BillingSchemeId: billingSchemeId,
+		NetType:         NetTypeWan,
+		Name:            service.Name + service.Namespace + string(service.UID),
+		SubjectId:       0,
+	}
+	// 查询共享带宽计费ID
+	bandwidthReq := lb.NewBandwidthBillingSchemeRequest()
+	// 获取RegionCode
+	bandwidthReq.RegionCode = ""
+	bandwidthReq.AvailableZoneCode = azCode
+	bandwidthReq.VpcId = ""
+	bandwidthResp, err := api.VpcBandwidthBillingScheme(bandwidthReq)
+	if err != nil || bandwidthResp.Code != consts.LbRequestSuccess {
+		return "", errors.New(fmt.Sprintf("查询共享带宽计费失败，code:%s,err:%v", bandwidthResp.Code, err))
+	}
+
+outer:
+	for i := 0; i < len(bandwidthResp.Data); i++ {
+		bandwidth := bandwidthResp.Data[i]
+		for j := 0; j < len(bandwidth.BillingScheme); j++ {
+			bill := bandwidth.BillingScheme[j]
+			if bill.BillingType == BillingType {
+				billingSchemeId = bill.BillingSchemeId
+				break outer
+			}
+		}
+	}
+
 	request.BandwidthInfo = lb.PackageCreateSlbBandwidthInfo{
 		Name: service.Name + service.Namespace + string(service.UID),
 		// 获取BillingSchemeId
@@ -226,6 +263,7 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service, nodes
 		Duration:        0,
 		EipCount:        int(lbEip),
 	}
+
 	response, err := api.PackageCreateSlb(request)
 	if err != nil || response.Code != consts.LbRequestSuccess {
 		return "", errors.New(fmt.Sprintf("创建lb失败%v %v", err, response.Message))
@@ -305,7 +343,6 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 			return err
 		}
 		return l.describeTask(response.TaskId)
-		//	 TODO 精确更新
 	}
 	if len(updateList) > 0 {
 		request := lb.NewVpcSlbUpdateListenRequest()
@@ -318,8 +355,8 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 			return err
 		}
 		return l.describeTask(response.TaskId)
-		//	TODO 覆盖更新
 	}
+	// TODO 更新slb的Annotations
 	return nil
 }
 

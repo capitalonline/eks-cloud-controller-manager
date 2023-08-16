@@ -65,6 +65,13 @@ func ParseFromHttpResponse(hr *http.Response, response Response, r Request) (err
 		return errors.NewCdsSDKError("ClientError.IOError", msg, "")
 	}
 	if hr.StatusCode != 200 {
+		if len(body) != 0 {
+			err = json.Unmarshal(body, &response)
+			if err != nil {
+				msg := fmt.Sprintf("Fail to parse json content: %s, because: %s", body, err)
+				return errors.NewCdsSDKError("ClientError.ParseJsonError", msg, "")
+			}
+		}
 		fmt.Println(r.GetAction())
 		msg := fmt.Sprintf("Request fail with http status code: %s,request params:%s, with body: %s", hr.Status, string(reqParams), body)
 		return errors.NewCdsSDKError("ClientError.HttpStatusCodeError", msg, "")

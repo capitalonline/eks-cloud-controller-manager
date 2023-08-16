@@ -36,8 +36,10 @@ const (
 	EnvAz              = "CDS_CLUSTER_AZ"
 	SCHEMA             = "CDS_API_SCHEMA"
 	EnvLbApiHost       = "CDS_LB_API_HOST"
+	EnvVpcId           = "CDS_VPC_ID"
 )
 
 const (
 	LbRequestSuccess = "Success"
+	ErrorSlbNotFound = "50002"
 )

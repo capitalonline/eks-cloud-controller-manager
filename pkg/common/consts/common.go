@@ -13,6 +13,7 @@ var (
 	ClusterId       string
 	ApiHost         string
 	LbApiHost       string
+	VpcID           string
 )
 
 func init() {
@@ -53,5 +54,8 @@ func init() {
 		LbApiHost = os.Getenv(EnvLbApiHost)
 	} else {
 		LbApiHost = LbApiHostAddress
+	}
+	if os.Getenv(EnvVpcId) != "" {
+		VpcID = os.Getenv(EnvVpcId)
 	}
 }

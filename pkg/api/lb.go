@@ -19,9 +19,6 @@ func DescribeVpcSlb(request *lb.DescribeVpcSlbRequest) (*lb.DescribeVpcSlbRespon
 	cpf.HttpProfile.Endpoint = consts.LbApiHost
 	client, _ := lb.NewClient(credential, consts.Region, cpf)
 	response, err := client.DescribeVpcSlb(request)
-	if err != nil {
-		return nil, err
-	}
 	return response, err
 }
 
