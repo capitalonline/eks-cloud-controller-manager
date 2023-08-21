@@ -24,7 +24,7 @@ func NewPackageCreateSlbRequest() (request *PackageCreateSlbRequest) {
 		BaseRequest: &cdshttp.BaseRequest{},
 	}
 	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionPackageCreateSlb)
-	request.SetDomain(consts.ApiHost)
+	request.SetDomain(consts.LbApiHost)
 	return
 }
 
@@ -47,7 +47,7 @@ func NewDescribeVpcSlbRequest() (request *DescribeVpcSlbRequest) {
 		BaseRequest: &cdshttp.BaseRequest{},
 	}
 	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionDescribeLbInstance)
-	request.SetDomain(consts.ApiHost)
+	request.SetDomain(consts.LbApiHost)
 	return
 }
 
@@ -72,7 +72,7 @@ func NewVpcSlbUpdateListenRequest() (request *VpcSlbUpdateListenRequest) {
 		BaseRequest: &cdshttp.BaseRequest{},
 	}
 	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionVpcSlbUpdateListen)
-	request.SetDomain(consts.ApiHost)
+	request.SetDomain(consts.LbApiHost)
 	return
 }
 
@@ -97,7 +97,7 @@ func NewDescribeTaskRequest() (request *DescribeTaskRequest) {
 		BaseRequest: &cdshttp.BaseRequest{},
 	}
 	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionDescribeLbTaskStatus)
-	request.SetDomain(consts.ApiHost)
+	request.SetDomain(consts.LbApiHost)
 	return
 }
 
@@ -147,7 +147,7 @@ func NewVpcSlbBillingSchemeRequest() (request *VpcSlbBillingSchemeRequest) {
 		BaseRequest: &cdshttp.BaseRequest{},
 	}
 	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionVpcSlbBillingScheme)
-	request.SetDomain(consts.ApiHost)
+	request.SetDomain(consts.LbApiHost)
 	return
 }
 
@@ -172,7 +172,7 @@ func NewVpcSlbClearListenRequest() (request *VpcSlbClearListenRequest) {
 		BaseRequest: &cdshttp.BaseRequest{},
 	}
 	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionVpcSlbClearListen)
-	request.SetDomain(consts.ApiHost)
+	request.SetDomain(consts.LbApiHost)
 	return
 }
 
@@ -197,7 +197,7 @@ func NewBandwidthBillingSchemeRequest() (request *BandwidthBillingSchemeRequest)
 		BaseRequest: &cdshttp.BaseRequest{},
 	}
 	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionVpcBandwidthBillingScheme)
-	request.SetDomain(consts.ApiHost)
+	request.SetDomain(consts.LbApiHost)
 	return
 }
 
