@@ -2,6 +2,8 @@ package provider
 
 import (
 	"context"
+	"fmt"
+	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -127,6 +129,8 @@ func TestLoadBalancer_UpdateLoadBalancer(t *testing.T) {
 }
 
 func TestLoadBalancer_EnsureLoadBalancer(t *testing.T) {
+
+	fmt.Println(consts.VpcID)
 	config, err := clientcmd.RESTConfigFromKubeConfig([]byte(s))
 
 	if err != nil {
