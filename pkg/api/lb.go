@@ -30,10 +30,12 @@ func PackageCreateSlb(request *lb.PackageCreateSlbRequest) (*lb.PackageCreateSlb
 	cpf.HttpProfile.Endpoint = consts.LbApiHost
 	client, _ := lb.NewClient(credential, consts.Region, cpf)
 	response, err := client.PackageCreateSlb(request)
+	s, _ := json.Marshal(request)
+	fmt.Println(string(s))
 	if err != nil {
 		return nil, err
 	}
-	s, _ := json.Marshal(response)
+	s, _ = json.Marshal(response)
 	fmt.Println(string(s))
 	return response, err
 }

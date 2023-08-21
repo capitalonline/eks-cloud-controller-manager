@@ -26,13 +26,13 @@ const (
 	AnnotationLbAlgorithm  = "service.beta.kubernetes.io/cds-load-balancer-algorithm"
 	AnnotationLbListen     = "service.eks.listen"
 	LbNetTypeWan           = "wan"
+	LbNetTypeWanLan        = "wan_lan"
 	LbBillingMethodCostPay = "0" // 按需计费
 	LabelNodeAz            = "node.kubernetes.io/node.az"
 	LbTaskSuccess          = "success"
 	LbTakError             = "error"
-	NetTypeWan             = "wan"
-	NetTypeWanLan          = "wan_lan"
 	BillingType            = "number"
+	BandwidthShared        = "shared"
 )
 
 const (
@@ -193,6 +193,7 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service, nodes
 	}
 	randomInt := rand.Intn(len(azList))
 	var azCode = azList[randomInt]
+	// TODO 从node的Annotation中获取节点azCode
 	azCode = "CN_DaBieShan_A"
 	// 查询计费方案
 	lsbSchemaReq := lb.NewVpcSlbBillingSchemeRequest()
@@ -221,20 +222,22 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service, nodes
 	request := lb.NewPackageCreateSlbRequest()
 	// 获取一个azcode
 	request.AvailableZoneCode = azCode
+	request.VpcId = consts.VpcID
 	// 当前仅支持4层
 	request.Level = int(lbType)
 	request.SlbInfo = lb.PackageCreateSlbInfo{
 		BillingSchemeId: billingSchemeId,
-		NetType:         NetTypeWan,
+		NetType:         LbNetTypeWan,
 		Name:            service.Name + service.Namespace + string(service.UID),
 		SubjectId:       0,
 	}
 	// 查询共享带宽计费ID
 	bandwidthReq := lb.NewBandwidthBillingSchemeRequest()
 	// 获取RegionCode
-	bandwidthReq.RegionCode = ""
+	bandwidthReq.RegionCode = consts.Region
 	bandwidthReq.AvailableZoneCode = azCode
-	bandwidthReq.VpcId = ""
+	bandwidthReq.VpcId = consts.VpcID
+	bandwidthReq.VpcId = BandwidthShared
 	bandwidthResp, err := api.VpcBandwidthBillingScheme(bandwidthReq)
 	if err != nil || bandwidthResp.Code != consts.LbRequestSuccess {
 		return "", errors.New(fmt.Sprintf("查询共享带宽计费失败，code:%s,err:%v", bandwidthResp.Code, err))
@@ -257,11 +260,12 @@ outer:
 		// 获取BillingSchemeId
 		BillingSchemeId: billingSchemeId,
 		Qos:             int(lbBandwidth),
-		Type:            lbSpec,
-		IsAutoRenewal:   false,
-		IsToMonth:       false,
-		Duration:        0,
-		EipCount:        int(lbEip),
+		//Type:          lbSpec,
+		Type:          BandwidthShared,
+		IsAutoRenewal: false,
+		IsToMonth:     false,
+		Duration:      0,
+		EipCount:      int(lbEip),
 	}
 
 	response, err := api.PackageCreateSlb(request)
@@ -273,8 +277,9 @@ outer:
 
 func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, nodes []*v1.Node) error {
 	//listeners := make([]lb.VpcSlbUpdateListenRequestListen, 0, len(service.Spec.Ports))
-	// 查询service的Annotations是否保存有上次更改时的
-	var listenInfo = make(map[string]string)
+	// 查询service的Annotations是否保存有上次更改时的记录
+	//var listenList = make([]lb.VpcSlbUpdateListenRequestListen, 0, len(service.Spec.Ports))
+	//var newListenList = make([]lb.VpcSlbUpdateListenRequestListen, 0, len(service.Spec.Ports)) // 用来存储新的值
 	listenAnnotation, ok := service.Annotations[AnnotationLbListen]
 	if ok {
 		if err := json.Unmarshal([]byte(listenAnnotation), &listenAnnotation); err != nil {
@@ -324,11 +329,12 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 			})
 		}
 		listen.RsList = rsList
-		if _, ok := listenInfo[string(port.NodePort)]; !ok {
-			createList = append(createList, listen)
-		} else {
-			updateList = append(updateList, listen)
-		}
+		//if _, ok := listenList[string(port.NodePort)]; !ok {
+		updateList = append(createList, listen)
+		//} else {
+		//	updateList = append(updateList, listen)
+		//}
+		//newlistenInfo[string(port.NodePort)] = ""
 	}
 
 	if len(createList) > 0 {
