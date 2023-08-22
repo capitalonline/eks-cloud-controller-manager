@@ -8,6 +8,7 @@ import (
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/lb"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/utils"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/utils/profile"
+	"k8s.io/klog/v2"
 	"net/http"
 )
 
@@ -110,14 +111,14 @@ func VpcSlbUpdateListen(request *lb.VpcSlbUpdateListenRequest) (*lb.VpcSlbUpdate
 
 func VpcBandwidthBillingScheme(request *lb.BandwidthBillingSchemeRequest) (*lb.BandwidthBillingSchemeResponse, error) {
 	credential := utils.NewCredential(consts.AccessKeyID, consts.AccessKeySecret)
-
 	cpf := profile.NewClientProfile()
 	cpf.HttpProfile.ReqMethod = http.MethodPost
 	cpf.HttpProfile.Endpoint = consts.LbApiHost
 	client, _ := lb.NewClient(credential, consts.Region, cpf)
 	response, err := client.BandwidthBillingScheme(request)
 	if err != nil {
-		return nil, err
+		klog.Errorf(fmt.Sprintf("查询共享带宽计费失败：response：%#v,err:%v", request, err))
+		return response, err
 	}
 	if response == nil || len(response.Data) < 1 {
 		return nil, errors.New("未查询到对应计费信息")

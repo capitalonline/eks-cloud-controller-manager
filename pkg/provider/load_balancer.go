@@ -234,13 +234,16 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service, nodes
 	// 查询共享带宽计费ID
 	bandwidthReq := lb.NewBandwidthBillingSchemeRequest()
 	// 获取RegionCode
-	bandwidthReq.RegionCode = consts.Region
+	//bandwidthReq.RegionCode = consts.Region
 	bandwidthReq.AvailableZoneCode = azCode
 	bandwidthReq.VpcId = consts.VpcID
-	bandwidthReq.VpcId = BandwidthShared
+	bandwidthReq.Type = BandwidthShared
 	bandwidthResp, err := api.VpcBandwidthBillingScheme(bandwidthReq)
-	if err != nil || bandwidthResp.Code != consts.LbRequestSuccess {
-		return "", errors.New(fmt.Sprintf("查询共享带宽计费失败，code:%s,err:%v", bandwidthResp.Code, err))
+	if err != nil || bandwidthResp == nil {
+		return "", fmt.Errorf("查询共享带宽计费失败,err:%v", err)
+	}
+	if bandwidthResp.Code != consts.LbRequestSuccess {
+		return "", errors.New(fmt.Sprintf("查询共享带宽计费失败，code:%s,err:%v", bandwidthResp.Code))
 	}
 
 outer:
@@ -269,7 +272,10 @@ outer:
 	}
 
 	response, err := api.PackageCreateSlb(request)
-	if err != nil || response.Code != consts.LbRequestSuccess {
+	if err != nil || response == nil {
+		return "", fmt.Errorf("创建slb失败:%v", err)
+	}
+	if response.Code != consts.LbRequestSuccess {
 		return "", errors.New(fmt.Sprintf("创建lb失败%v %v", err, response.Message))
 	}
 	return response.Data.SlbId, l.describeTask(response.TaskId)
