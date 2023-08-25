@@ -10,6 +10,8 @@ import (
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/lb"
 	v1 "k8s.io/api/core/v1"
 	"math/rand"
+	"time"
+
 	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -48,12 +50,13 @@ const (
 )
 
 const (
-	IpTypeInternal = ""
+	IpTypeInternal = "InternalIP"
 	PlatformEks    = "eks"
 
 	UpdateListenFull  = "full"  // 全量更新
 	UpdateListenExact = "exact" // 精确更新
 
+	RsTypeEks = "eks"
 )
 
 var lbSpecMap = map[string]string{
@@ -71,6 +74,14 @@ type LoadBalancer struct {
 func (l *LoadBalancer) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
 
 	response, err := l.describeLbInstance(ctx, clusterName, service)
+	// k8s在删除节点之后会查一遍slb，确认是否被删除
+	if response != nil && response.Code == "50002" {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+
 	// 接口请求返回异常
 	slb := response.Data
 	ingresses := make([]v1.LoadBalancerIngress, 0, len(slb.VipList))
@@ -104,7 +115,7 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 
 	// 先查询lb是不是已经创建过了
 	request := lb.NewDescribeVpcSlbRequest()
-	request.SlbName = service.Name + service.Namespace + string(service.UID)
+	request.SlbName = service.Name + "-" + service.Namespace + "-" + string(service.UID)
 	response, err := api.DescribeVpcSlb(request)
 	// 调用接口有问题，接口没返回json
 	if err != nil && response == nil {
@@ -133,8 +144,24 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 	if err != nil {
 		return nil, err
 	}
-	// 修改监听策略
-	return nil, nil
+	// 重新查一遍slb信息
+	request = lb.NewDescribeVpcSlbRequest()
+	request.SlbName = service.Name + "-" + service.Namespace + "-" + string(service.UID)
+	response, err = api.DescribeVpcSlb(request)
+	if err != nil {
+		return nil, err
+	}
+	if response == nil {
+		return nil, fmt.Errorf("查询slb异常")
+	}
+	ingresses := make([]v1.LoadBalancerIngress, 0, len(response.Data.VipList))
+	for i := 0; i < len(response.Data.VipList); i++ {
+		vip := response.Data.VipList[i]
+		ingresses = append(ingresses, v1.LoadBalancerIngress{IP: vip.Vip})
+	}
+	return &v1.LoadBalancerStatus{
+		Ingress: ingresses,
+	}, nil
 }
 
 func (l *LoadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
@@ -228,7 +255,7 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service, nodes
 	request.SlbInfo = lb.PackageCreateSlbInfo{
 		BillingSchemeId: billingSchemeId,
 		NetType:         LbNetTypeWan,
-		Name:            service.Name + service.Namespace + string(service.UID),
+		Name:            service.Name + "-" + service.Namespace + "-" + string(service.UID),
 		SubjectId:       0,
 	}
 	// 查询共享带宽计费ID
@@ -259,7 +286,7 @@ outer:
 	}
 
 	request.BandwidthInfo = lb.PackageCreateSlbBandwidthInfo{
-		Name: service.Name + service.Namespace + string(service.UID),
+		Name: "Bandwidth-" + service.Name + "-" + service.Namespace + "-" + string(service.UID),
 		// 获取BillingSchemeId
 		BillingSchemeId: billingSchemeId,
 		Qos:             int(lbBandwidth),
@@ -292,6 +319,11 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 			return err
 		}
 	}
+	algorithm, ok := service.Annotations[AnnotationLbAlgorithm]
+	if !ok {
+		algorithm = "rr"
+	}
+
 	lbResp, err := l.describeLbInstance(ctx, "", service)
 	if err != nil {
 		return err
@@ -315,6 +347,9 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 			ListenIp:       vip,
 			ListenPort:     int(port.Port),
 			ListenProtocol: string(port.Protocol),
+			Scheduler:      algorithm,
+			ListenName:     port.Name,
+			Timeout:        10, // 默认超时时间10
 			RsList:         nil,
 		}
 		rsList := make([]lb.VpcSlbUpdateListenRequestRs, 0, len(nodes))
@@ -330,6 +365,9 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 				}
 			}
 			rsList = append(rsList, lb.VpcSlbUpdateListenRequestRs{
+				RsId:    node.Spec.ProviderID,
+				RsName:  node.Name,
+				RsType:  RsTypeEks,
 				RsLanIp: address,
 				RsPort:  int(port.NodePort),
 			})
@@ -374,13 +412,17 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 
 func (l *LoadBalancer) clearLbListen(ctx context.Context, clusterName string, service *v1.Service) error {
 	request := lb.NewDescribeVpcSlbRequest()
-	request.SlbName = service.Name + service.Namespace + string(service.UID)
+	request.SlbName = service.Name + "-" + service.Namespace + "-" + string(service.UID)
 	response, err := api.DescribeVpcSlb(request)
 	if err != nil {
 		return err
 	}
 	slb := response.Data
 	clearResp, err := api.VpcSlbClearListen(slb.SlbId)
+	// slb不存在，直接返回成功
+	if clearResp != nil && clearResp.Code == "50002" {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -389,10 +431,10 @@ func (l *LoadBalancer) clearLbListen(ctx context.Context, clusterName string, se
 
 func (l *LoadBalancer) describeLbInstance(ctx context.Context, clusterName string, service *v1.Service) (*lb.DescribeVpcSlbResponse, error) {
 	request := lb.NewDescribeVpcSlbRequest()
-	request.SlbName = service.Name + service.Namespace + string(service.UID)
+	request.SlbName = service.Name + "-" + service.Namespace + "-" + string(service.UID)
 	response, err := api.DescribeVpcSlb(request)
 	if err != nil {
-		return nil, err
+		return response, err
 	}
 	// 接口请求返回异常
 	if response.Code != consts.LbRequestSuccess {
@@ -414,6 +456,7 @@ func (l *LoadBalancer) describeTask(taskId string) error {
 		case LbTakError:
 			return errors.New("任务失败")
 		default:
+			time.Sleep(time.Second * 3)
 		}
 	}
 	return errors.New("任务超时")

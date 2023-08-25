@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
@@ -31,13 +30,9 @@ func PackageCreateSlb(request *lb.PackageCreateSlbRequest) (*lb.PackageCreateSlb
 	cpf.HttpProfile.Endpoint = consts.LbApiHost
 	client, _ := lb.NewClient(credential, consts.Region, cpf)
 	response, err := client.PackageCreateSlb(request)
-	s, _ := json.Marshal(request)
-	fmt.Println(string(s))
 	if err != nil {
 		return nil, err
 	}
-	s, _ = json.Marshal(response)
-	fmt.Println(string(s))
 	return response, err
 }
 
@@ -52,8 +47,6 @@ func VpcSlbBillingScheme(request *lb.VpcSlbBillingSchemeRequest) (*lb.VpcSlbBill
 	if err != nil {
 		return nil, err
 	}
-	s, _ := json.Marshal(response)
-	fmt.Println(string(s))
 	return response, err
 }
 
@@ -84,7 +77,7 @@ func VpcSlbClearListen(slbId string) (*lb.VpcSlbClearListenResponse, error) {
 	client, _ := lb.NewClient(credential, consts.Region, cpf)
 	response, err := client.VpcSlbClearListen(request)
 	if err != nil {
-		return nil, err
+		return response, err
 	}
 	if response == nil {
 		return nil, errors.New("清空监听规则接口错误")
@@ -123,7 +116,5 @@ func VpcBandwidthBillingScheme(request *lb.BandwidthBillingSchemeRequest) (*lb.B
 	if response == nil || len(response.Data) < 1 {
 		return nil, errors.New("未查询到对应计费信息")
 	}
-	s, _ := json.Marshal(response)
-	fmt.Println(string(s))
 	return response, err
 }

@@ -23,6 +23,7 @@ func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v
 	nodeAddress := make([]v1.NodeAddress, 0, len(address))
 	for _, item := range address {
 		nodeAddress = append(nodeAddress, v1.NodeAddress{
+			Type:    v1.NodeInternalIP,
 			Address: item,
 		})
 	}
@@ -41,10 +42,11 @@ func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 	nodeAddress := make([]v1.NodeAddress, 0, len(address))
 	for _, item := range address {
 		nodeAddress = append(nodeAddress, v1.NodeAddress{
+			Type:    v1.NodeInternalIP,
 			Address: item,
 		})
 	}
-	return nil, nil
+	return nodeAddress, nil
 }
 
 func (i *Instances) InstanceID(ctx context.Context, nodeName types.NodeName) (string, error) {
