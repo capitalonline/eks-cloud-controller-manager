@@ -10,6 +10,7 @@ import (
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/lb"
 	v1 "k8s.io/api/core/v1"
 	"math/rand"
+	"strings"
 	"time"
 
 	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -43,10 +44,15 @@ const (
 	LBSpecSuper    = "super"    // 超强型
 	LBSpecExtreme  = "extreme"  // 至强型
 
-	LBSpecNameStandard = "标准型Ⅰ"
-	LBSpecNameHigh     = "高阶型Ⅰ"
-	LBSpecNameSuper    = "超强型Ⅰ"
-	LBSpecNameExtreme  = "至强型Ⅰ"
+	//LBSpecNameStandard = "标准型Ⅰ"
+	//LBSpecNameHigh     = "高阶型Ⅰ"
+	//LBSpecNameSuper    = "超强型Ⅰ"
+	//LBSpecNameExtreme  = "至强型Ⅰ"
+
+	LBSpecNameStandard = "标准型"
+	LBSpecNameHigh     = "高阶型"
+	LBSpecNameSuper    = "超强型"
+	LBSpecNameExtreme  = "至强型"
 )
 
 const (
@@ -235,7 +241,7 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service, nodes
 
 	for i := 0; i < len(lsbSchema.Data); i++ {
 		schema := lsbSchema.Data[i]
-		if schema.ConfName == lbSpecMap[lbSpec] {
+		if strings.Contains(schema.ConfName, lbSpecMap[lbSpec]) {
 			billingSchemeId = schema.BillingSchemeId
 			break
 		}
