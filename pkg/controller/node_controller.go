@@ -167,11 +167,11 @@ func (n *NodeController) Update(ctx context.Context) error {
 			fmt.Println(err)
 		}
 		// 需要ccm主动触发删除该节点
-		if details != nil && details.Data.NodeId == "" {
-			if err := n.clientSet.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{}); err != nil {
-				klog.Errorf("unable to delete node %q: %v", node.Name, err)
-			}
-		}
+		//if details != nil && details.Data.NodeId == "" {
+		//	if err := n.clientSet.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{}); err != nil {
+		//		klog.Errorf("unable to delete node %q: %v", node.Name, err)
+		//	}
+		//}
 	}
 	return nil
 }
