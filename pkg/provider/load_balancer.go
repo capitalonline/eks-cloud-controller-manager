@@ -355,9 +355,10 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 			ListenPort:     int(port.Port),
 			ListenProtocol: string(port.Protocol),
 			Scheduler:      algorithm,
-			ListenName:     port.Name,
-			Timeout:        10, // 默认超时时间10
-			RsList:         nil,
+			// TODO 名称修改
+			ListenName: port.Name,
+			Timeout:    10, // 默认超时时间10
+			RsList:     nil,
 		}
 		rsList := make([]lb.VpcSlbUpdateListenRequestRs, 0, len(nodes))
 
@@ -413,7 +414,7 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 		}
 		return l.describeTask(response.TaskId)
 	}
-	// TODO 更新slb的Annotations
+	// TODO 后续优化，精确更新更新slb
 	return nil
 }
 

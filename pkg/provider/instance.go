@@ -18,6 +18,8 @@ func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v
 	klog.Info(fmt.Sprintf("NodeAddresses name:%v", name))
 	address, err := api.NodeAddresses(consts.ClusterId, "", string(name))
 	if err != nil {
+		// TODO 加日志
+		klog.Errorf("")
 		return nil, nil
 	}
 	nodeAddress := make([]v1.NodeAddress, 0, len(address))
@@ -40,6 +42,7 @@ func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 	}
 	address, err := api.NodeAddresses(consts.ClusterId, providerID, "")
 	if err != nil {
+		// TODO 加日志
 		return nil, nil
 	}
 	nodeAddress := make([]v1.NodeAddress, 0, len(address))
@@ -61,6 +64,7 @@ func (i *Instances) InstanceID(ctx context.Context, nodeName types.NodeName) (st
 	if err != nil {
 		return "", err
 	}
+	// TODO node_id为空处理
 	return resp.Data.NodeId, nil
 }
 
@@ -109,6 +113,7 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 	if err != nil {
 		return true, err
 	}
+	// TODO NodeId
 	if address.Data.NodeId == "" {
 		return false, nil
 	}
