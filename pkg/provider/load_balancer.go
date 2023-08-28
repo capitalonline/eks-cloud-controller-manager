@@ -32,6 +32,7 @@ const (
 	LbNetTypeWanLan        = "wan_lan"
 	LbBillingMethodCostPay = "0" // 按需计费
 	LabelNodeAz            = "node.kubernetes.io/node.az"
+	LabelNodeAzCode        = "node.kubernetes.io/node.az-code"
 	LbTaskSuccess          = "success"
 	LbTakError             = "error"
 	BillingType            = "number"
@@ -217,7 +218,7 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service, nodes
 		if len(node.Labels) == 0 {
 			continue
 		}
-		if az, ok := node.Labels[LabelNodeAz]; ok {
+		if az, ok := node.Labels[LabelNodeAzCode]; ok {
 			azList = append(azList, az)
 		}
 	}
@@ -227,7 +228,7 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service, nodes
 	randomInt := rand.Intn(len(azList))
 	var azCode = azList[randomInt]
 	// TODO 从node的Annotation中获取节点azCode
-	azCode = "CN_DaBieShan_A"
+	//azCode = "CN_DaBieShan_A"
 	// 查询计费方案
 	lsbSchemaReq := lb.NewVpcSlbBillingSchemeRequest()
 	lsbSchemaReq.AvailableZoneCode = azCode
