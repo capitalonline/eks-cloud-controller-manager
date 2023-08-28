@@ -159,20 +159,29 @@ func (n *NodeController) Update(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		flag, err := UpdateNode(&node, details.Data)
-		if err != nil {
-			return err
+		// id为空可能是节点添加后任务流还未回调ccm就查询了，需要跳过
+		if details == nil || details.Data.NodeId == "" {
+			continue
 		}
-		if flag {
-			_, err = n.clientSet.CoreV1().Nodes().Update(context.Background(), &node, metav1.UpdateOptions{})
-			fmt.Println(err)
+		switch details.Data.Status {
+		case consts.NodeStatusFailed, consts.NodeStatusError, consts.NodeStatusDeleted:
+			//需要ccm主动触发删除该节点
+			if err := n.clientSet.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{}); err != nil {
+				klog.Errorf("unable to delete node %q: %v", node.Name, err)
+			}
+		case consts.NodeStatusRunning:
+			flag, err := UpdateNode(&node, details.Data)
+			if err != nil {
+				return err
+			}
+			if flag {
+				_, err = n.clientSet.CoreV1().Nodes().Update(context.Background(), &node, metav1.UpdateOptions{})
+				if err != nil {
+					klog.Errorf("更新节点失败，err:%v", err)
+				}
+			}
+		default:
 		}
-		// 需要ccm主动触发删除该节点
-		//if details != nil && details.Data.NodeId == "" {
-		//	if err := n.clientSet.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{}); err != nil {
-		//		klog.Errorf("unable to delete node %q: %v", node.Name, err)
-		//	}
-		//}
 	}
 	return nil
 }
