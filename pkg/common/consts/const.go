@@ -43,3 +43,10 @@ const (
 	LbRequestSuccess = "Success"
 	ErrorSlbNotFound = "50002"
 )
+
+const (
+	NodeStatusError   = "error"
+	NodeStatusDeleted = "deleted"
+	NodeStatusFailed  = "failed"
+	NodeStatusRunning = "running"
+)

@@ -79,6 +79,7 @@ type NodeCCMInitResponse struct {
 
 type NodeCCMInitResponseData struct {
 	PrivateIp   string       `json:"PrivateIp"`
+	Status      string       `json:"Status"`
 	Labels      []Label      `json:"Labels"`
 	Taints      []Taint      `json:"Taints"`
 	Annotations []Annotation `json:"Annotations"`
