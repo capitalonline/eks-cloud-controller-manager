@@ -149,13 +149,26 @@ type VpcSlbUpdateListenRequest struct {
 }
 
 type VpcSlbUpdateListenRequestListen struct {
-	ListenIp       string                        `json:"ListenIp"`
-	ListenPort     int                           `json:"ListenPort"`
-	ListenProtocol string                        `json:"ListenProtocol"`
-	Scheduler      string                        `json:"Scheduler"`
-	ListenName     string                        `json:"ListenName"`
-	Timeout        int                           `json:"Timeout"`
-	RsList         []VpcSlbUpdateListenRequestRs `json:"RsList"`
+	ListenIp       string                               `json:"ListenIp"`
+	ListenPort     int                                  `json:"ListenPort"`
+	ListenProtocol string                               `json:"ListenProtocol"`
+	Scheduler      string                               `json:"Scheduler"`
+	ListenName     string                               `json:"ListenName"`
+	Timeout        int                                  `json:"Timeout"`
+	RsList         []VpcSlbUpdateListenRequestRs        `json:"RsList"`
+	HealthCheck    VpcSlbUpdateListenRequestHealthCheck `json:"HealthCheck"`
+}
+
+type VpcSlbUpdateListenRequestHealthCheck struct {
+	Protocol         string `json:"Protocol"`
+	Virtualhost      string `json:"Virtualhost"`
+	Port             int    `json:"Port,omitempty"`
+	Path             string `json:"Path,omitempty"`
+	StatusCode       int    `json:"StatusCode,omitempty"`
+	ConnectTimeout   int    `json:"ConnectTimeout,omitempty"`
+	DelayLoop        int    `json:"DelayLoop,omitempty"`
+	Retry            int    `json:"Retry,omitempty"`
+	DelayBeforeRetry int    `json:"DelayBeforeRetry,omitempty"`
 }
 
 type VpcSlbUpdateListenRequestRs struct {
@@ -165,6 +178,7 @@ type VpcSlbUpdateListenRequestRs struct {
 	RsWanIp string `json:"RsWanIp"`
 	RsLanIp string `json:"RsLanIp"`
 	RsPort  int    `json:"RsPort"`
+	Weight  int    `json:"Weight"`
 }
 
 func (r *VpcSlbUpdateListenRequest) ToJsonString() string {

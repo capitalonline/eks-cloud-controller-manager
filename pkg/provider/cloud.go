@@ -36,7 +36,12 @@ func (cloud *Cloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 }
 
 func (cloud *Cloud) Instances() (cloudprovider.Instances, bool) {
-	return &Instances{}, true
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		log.Fatalf("newCloud:: Failed to create kubernetes config: %v", err)
+	}
+	clientSet, err := kubernetes.NewForConfig(config)
+	return &Instances{clientSet: clientSet}, true
 }
 
 func (cloud *Cloud) InstancesV2() (cloudprovider.InstancesV2, bool) {

@@ -7,19 +7,21 @@ import (
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/api"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 )
 
 type Instances struct {
+	clientSet *kubernetes.Clientset
 }
 
 func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.NodeAddress, error) {
 	klog.Info(fmt.Sprintf("NodeAddresses name:%v", name))
 	address, err := api.NodeAddresses(consts.ClusterId, "", string(name))
 	if err != nil {
-		// TODO 加日志
-		klog.Errorf("")
+		klog.Errorf("查询节点ip失败,err:%s", err.Error())
 		return nil, nil
 	}
 	nodeAddress := make([]v1.NodeAddress, 0, len(address))
@@ -42,7 +44,7 @@ func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 	}
 	address, err := api.NodeAddresses(consts.ClusterId, providerID, "")
 	if err != nil {
-		// TODO 加日志
+		klog.Errorf("查询节点ip失败,err:%s", err.Error())
 		return nil, nil
 	}
 	nodeAddress := make([]v1.NodeAddress, 0, len(address))
@@ -62,10 +64,23 @@ func (i *Instances) InstanceID(ctx context.Context, nodeName types.NodeName) (st
 	klog.Info(fmt.Sprintf("InstanceID nodeName:%v", nodeName))
 	resp, err := api.NodeCCMInit(consts.ClusterId, "", string(nodeName))
 	if err != nil {
+		klog.Errorf("通过openapi查询节点%s失败,err:%v", string(nodeName), err)
 		return "", err
 	}
-	// TODO node_id为空处理
-	return resp.Data.NodeId, nil
+	//  NodeId
+	if resp.Data.NodeId != "" {
+		return resp.Data.NodeId, nil
+	}
+	// NodeId 为空可能是因为节点的状态改变，直接返回providerId
+	node, err := i.clientSet.CoreV1().Nodes().Get(ctx, string(nodeName), metav1.GetOptions{})
+	if err != nil {
+		klog.Errorf("查询节点%s失败,err:%v", nodeName, err)
+		return "", err
+	}
+	if node != nil {
+		return node.Spec.ProviderID, nil
+	}
+	return "", nil
 }
 
 func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (string, error) {
@@ -73,6 +88,7 @@ func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (stri
 
 	resp, err := api.NodeCCMInit(consts.ClusterId, "", string(name))
 	if err != nil {
+		klog.Errorf("通过openapi查询节点%s失败,err:%v", string(name), err)
 		return "", err
 	}
 	for j := 0; j < len(resp.Data.Labels); j++ {
@@ -81,13 +97,14 @@ func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (stri
 			return label.Value, err
 		}
 	}
-	return "", nil
+	return "ecs", nil
 }
 
 func (i *Instances) InstanceTypeByProviderID(ctx context.Context, providerID string) (string, error) {
 	klog.Info(fmt.Sprintf("InstanceTypeByProviderID providerID:%v", providerID))
 	resp, err := api.NodeCCMInit(consts.ClusterId, providerID, "")
 	if err != nil {
+		klog.Errorf("通过openapi查询节点%s失败,err:%v", providerID, err)
 		return "", err
 	}
 	for j := 0; j < len(resp.Data.Labels); j++ {
@@ -111,11 +128,14 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 	klog.Info(fmt.Sprintf("InstanceExistsByProviderID providerID:%v", providerID))
 	address, err := api.NodeCCMInit(consts.ClusterId, providerID, "")
 	if err != nil {
+		klog.Errorf("通过openapi查询节点%s失败,err:%v", providerID, err)
 		return true, err
 	}
-	// TODO NodeId
-	if address.Data.NodeId == "" {
+	switch address.Data.Status {
+	// 这三种状态是需要删除的
+	case consts.NodeStatusFailed, consts.NodeStatusError, consts.NodeStatusDeleted:
 		return false, nil
+	default:
 	}
 	return true, nil
 }

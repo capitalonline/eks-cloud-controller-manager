@@ -100,7 +100,7 @@ func (l *LoadBalancer) GetLoadBalancer(ctx context.Context, clusterName string, 
 	}
 	return &v1.LoadBalancerStatus{
 		Ingress: ingresses,
-	}, false, err
+	}, true, err
 }
 
 // GetLoadBalancerName 获取lb名称
@@ -146,7 +146,6 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 	} else {
 		slbId = response.Data.SlbId
 	}
-	fmt.Println(slbId)
 	err = l.UpdateLoadBalancer(ctx, clusterName, service, nodes)
 	if err != nil {
 		return nil, err
@@ -154,6 +153,7 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 	// 重新查一遍slb信息
 	request = lb.NewDescribeVpcSlbRequest()
 	request.SlbName = service.Name + "-" + service.Namespace + "-" + string(service.UID)
+	request.SlbID = slbId
 	response, err = api.DescribeVpcSlb(request)
 	if err != nil {
 		return nil, err
@@ -229,6 +229,7 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service, nodes
 	var azCode = azList[randomInt]
 	// TODO 从node的Annotation中获取节点azCode
 	//azCode = "CN_DaBieShan_A"
+	azCode = strings.TrimSpace(azCode)
 	// 查询计费方案
 	lsbSchemaReq := lb.NewVpcSlbBillingSchemeRequest()
 	lsbSchemaReq.AvailableZoneCode = azCode
@@ -350,18 +351,22 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 	var updateList = make([]lb.VpcSlbUpdateListenRequestListen, 0, len(service.Spec.Ports))
 	for i := 0; i < len(service.Spec.Ports); i++ {
 		port := service.Spec.Ports[i]
+
+		listenName := fmt.Sprintf("勿删-%s-%v", strings.Replace(vip, ".", "", -1), port.Port)
+		if len(listenName) > 25 {
+			// 接口限制监听名最长只能是25个字符
+			listenName = listenName[:25]
+		}
 		listen := lb.VpcSlbUpdateListenRequestListen{
 			ListenIp:       vip,
 			ListenPort:     int(port.Port),
 			ListenProtocol: string(port.Protocol),
 			Scheduler:      algorithm,
-			// TODO 名称修改
-			ListenName: port.Name,
-			Timeout:    10, // 默认超时时间10
-			RsList:     nil,
+			ListenName:     listenName,
+			Timeout:        10, // 默认超时时间10
+			RsList:         nil,
 		}
 		rsList := make([]lb.VpcSlbUpdateListenRequestRs, 0, len(nodes))
-
 		for j := 0; j < len(nodes); j++ {
 			node := nodes[j]
 			var address string
@@ -378,9 +383,20 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 				RsType:  RsTypeEks,
 				RsLanIp: address,
 				RsPort:  int(port.NodePort),
+				// TODO 根据接点上pod数量给权重
+				Weight: 50,
 			})
+
 		}
 		listen.RsList = rsList
+
+		listen.HealthCheck = lb.VpcSlbUpdateListenRequestHealthCheck{
+			Protocol:         string(port.Protocol),
+			ConnectTimeout:   5,
+			Retry:            3,
+			DelayLoop:        10,
+			DelayBeforeRetry: 30,
+		}
 		//if _, ok := listenList[string(port.NodePort)]; !ok {
 		updateList = append(createList, listen)
 		//} else {
@@ -422,7 +438,9 @@ func (l *LoadBalancer) clearLbListen(ctx context.Context, clusterName string, se
 	request := lb.NewDescribeVpcSlbRequest()
 	request.SlbName = service.Name + "-" + service.Namespace + "-" + string(service.UID)
 	response, err := api.DescribeVpcSlb(request)
+	klog.Info(fmt.Sprintf("清除监听：%#v ,%v", response, err))
 	if err != nil {
+		klog.Errorf("清除监听失败,查询slb")
 		return err
 	}
 	slb := response.Data
