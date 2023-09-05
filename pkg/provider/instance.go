@@ -132,8 +132,8 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 		return true, err
 	}
 	switch address.Data.Status {
-	// 这三种状态是需要删除的
-	case consts.NodeStatusFailed, consts.NodeStatusError, consts.NodeStatusDeleted:
+	// 需要删除
+	case consts.NodeStatusDeleted:
 		return false, nil
 	default:
 	}

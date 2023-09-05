@@ -25,4 +25,4 @@ WORKDIR /app/
 
 RUN chmod -R 777 /app/
 
-ENTRYPOINT /app/${TO_BIN_FILE} --cloud-provider=cdscloud --leader-elect=false
+ENTRYPOINT /app/${TO_BIN_FILE} --cloud-provider=cdscloud --leader-elect=false --webhook-secure-port=0

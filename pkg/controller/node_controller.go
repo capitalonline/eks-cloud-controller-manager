@@ -164,7 +164,7 @@ func (n *NodeController) Update(ctx context.Context) error {
 			continue
 		}
 		switch details.Data.Status {
-		case consts.NodeStatusFailed, consts.NodeStatusError, consts.NodeStatusDeleted:
+		case consts.NodeStatusDeleted:
 			//需要ccm主动触发删除该节点
 			if err := n.clientSet.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{}); err != nil {
 				klog.Errorf("unable to delete node %q: %v", node.Name, err)
