@@ -227,8 +227,6 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service, nodes
 	}
 	randomInt := rand.Intn(len(azList))
 	var azCode = azList[randomInt]
-	// TODO 从node的Annotation中获取节点azCode
-	//azCode = "CN_DaBieShan_A"
 	azCode = strings.TrimSpace(azCode)
 	// 查询计费方案
 	lsbSchemaReq := lb.NewVpcSlbBillingSchemeRequest()
@@ -269,7 +267,6 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service, nodes
 	// 查询共享带宽计费ID
 	bandwidthReq := lb.NewBandwidthBillingSchemeRequest()
 	// 获取RegionCode
-	//bandwidthReq.RegionCode = consts.Region
 	bandwidthReq.AvailableZoneCode = azCode
 	bandwidthReq.VpcId = consts.VpcID
 	bandwidthReq.Type = BandwidthShared
@@ -280,6 +277,7 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service, nodes
 	if bandwidthResp.Code != consts.LbRequestSuccess {
 		return "", errors.New(fmt.Sprintf("查询共享带宽计费失败，code:%s,err:%v", bandwidthResp.Code))
 	}
+	bandwidthBillingSchemeId := ""
 
 outer:
 	for i := 0; i < len(bandwidthResp.Data); i++ {
@@ -287,23 +285,28 @@ outer:
 		for j := 0; j < len(bandwidth.BillingScheme); j++ {
 			bill := bandwidth.BillingScheme[j]
 			if bill.BillingType == BillingType {
-				billingSchemeId = bill.BillingSchemeId
+				bandwidthBillingSchemeId = bill.BillingSchemeId
 				break outer
 			}
 		}
 	}
+	//	 如果没有number类型计费，默认拿第一种方案的计费
+	if bandwidthBillingSchemeId == "" {
+		if len(bandwidthResp.Data) == 0 || len(bandwidthResp.Data[0].BillingScheme) == 0 {
+			return "", fmt.Errorf("没有相关的共享带宽计费方案")
+		}
+		bandwidthBillingSchemeId = bandwidthResp.Data[0].BillingScheme[0].BillingSchemeId
+	}
 
 	request.BandwidthInfo = lb.PackageCreateSlbBandwidthInfo{
-		Name: "Bandwidth-" + service.Name + "-" + service.Namespace + "-" + string(service.UID),
-		// 获取BillingSchemeId
-		BillingSchemeId: billingSchemeId,
+		Name:            "Bandwidth-" + service.Name + "-" + service.Namespace + "-" + string(service.UID),
+		BillingSchemeId: bandwidthBillingSchemeId,
 		Qos:             int(lbBandwidth),
-		//Type:          lbSpec,
-		Type:          BandwidthShared,
-		IsAutoRenewal: false,
-		IsToMonth:     false,
-		Duration:      0,
-		EipCount:      int(lbEip),
+		Type:            BandwidthShared,
+		IsAutoRenewal:   false,
+		IsToMonth:       false,
+		Duration:        0,
+		EipCount:        int(lbEip),
 	}
 
 	response, err := api.PackageCreateSlb(request)
