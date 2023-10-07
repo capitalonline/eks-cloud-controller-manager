@@ -275,7 +275,7 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service, nodes
 		return "", fmt.Errorf("查询共享带宽计费失败,err:%v", err)
 	}
 	if bandwidthResp.Code != consts.LbRequestSuccess {
-		return "", errors.New(fmt.Sprintf("查询共享带宽计费失败，code:%s,err:%v", bandwidthResp.Code))
+		return "", errors.New(fmt.Sprintf("查询共享带宽计费失败，code:%s", bandwidthResp.Code))
 	}
 	bandwidthBillingSchemeId := ""
 
@@ -441,7 +441,7 @@ func (l *LoadBalancer) clearLbListen(ctx context.Context, clusterName string, se
 	request := lb.NewDescribeVpcSlbRequest()
 	request.SlbName = service.Name + "-" + service.Namespace + "-" + string(service.UID)
 	response, err := api.DescribeVpcSlb(request)
-	klog.Info(fmt.Sprintf("清除监听：%#v ,%v", response, err))
+	//klog.Info(fmt.Sprintf("清除监听：%#v ,%v", response, err))
 	if err != nil {
 		klog.Errorf("清除监听失败,查询slb")
 		return err
