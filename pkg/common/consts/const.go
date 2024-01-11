@@ -25,6 +25,7 @@ const (
 	ActionVpcSlbClearListen         = "VpcSlbClearListen"   // 清空监听
 	ActionVpcSlbBillingScheme       = "VpcSlbBillingScheme" // slb计费查询
 	ActionVpcBandwidthBillingScheme = "BandwidthBillingScheme"
+	ActionSendAlarm                 = "EKSAlarm"
 )
 
 const (
@@ -42,6 +43,8 @@ const (
 const (
 	LbRequestSuccess = "Success"
 	ErrorSlbNotFound = "50002"
+
+	EksRequestSuccess = "Success"
 )
 
 const (
@@ -49,4 +52,18 @@ const (
 	NodeStatusDeleted = "deleted"
 	NodeStatusFailed  = "failed"
 	NodeStatusRunning = "running"
+)
+
+const EventNodeNotReady = "NodeNotReady"
+
+const NodeRoleMaster = "node-role.kubernetes.io/master"
+
+const (
+	AlarmMetricMasterDown = "eks.node.master_down"
+)
+
+const (
+	K8sWarnAlarmTheme   = "K8sWarnAlarm"
+	K8sErrAlarmTheme    = "K8sErrAlarm"
+	K8sMetricAlarmTheme = "K8sMetricAlarm"
 )

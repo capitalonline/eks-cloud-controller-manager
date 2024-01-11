@@ -57,3 +57,16 @@ func ModifyClusterLoad(request *eks.ModifyClusterLoadRequest) (*eks.ModifyCluste
 	}
 	return response, err
 }
+
+func NotifyMasterDown(request *eks.SendAlarmRequest) (*eks.SendAlarmResponse, error) {
+	credential := utils.NewCredential(consts.AccessKeyID, consts.AccessKeySecret)
+	cpf := profile.NewClientProfile()
+	cpf.HttpProfile.ReqMethod = http.MethodPost
+	cpf.HttpProfile.Endpoint = consts.ApiHost
+	client, _ := eks.NewClient(credential, consts.Region, cpf)
+	response, err := client.SendAlarm(request)
+	if err != nil {
+		return nil, err
+	}
+	return response, err
+}

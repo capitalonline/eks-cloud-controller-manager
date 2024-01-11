@@ -154,3 +154,40 @@ func (resp *ModifyClusterLoadResponse) ToJsonString() string {
 func (resp *ModifyClusterLoadResponse) FromJsonString(s string) error {
 	return json.Unmarshal([]byte(s), &resp)
 }
+
+type SendAlarmRequest struct {
+	*cdshttp.BaseRequest
+	Theme     string        `json:"Theme"`
+	ClusterId string        `json:"ClusterId"`
+	NodeId    string        `json:"NodeId"`
+	Source    string        `json:"Source"`
+	Keyword   string        `json:"Keyword"`
+	Metric    string        `json:"Metric"`
+	Value     interface{}   `json:"Value"`
+	Tags      []interface{} `json:"Tags"`
+	AlarmMsg  string        `json:"AlarmMsg"`
+}
+
+func (req *SendAlarmRequest) ToJsonString() string {
+	b, _ := json.Marshal(req)
+	return string(b)
+}
+
+func (req *SendAlarmRequest) FromJsonString(s string) error {
+	return json.Unmarshal([]byte(s), &req)
+}
+
+type SendAlarmResponse struct {
+	*cdshttp.BaseResponse
+	Code string `json:"Code"`
+	Msg  string `json:"Msg"`
+}
+
+func (resp *SendAlarmResponse) ToJsonString() string {
+	b, _ := json.Marshal(resp)
+	return string(b)
+}
+
+func (resp *SendAlarmResponse) FromJsonString(s string) error {
+	return json.Unmarshal([]byte(s), &resp)
+}

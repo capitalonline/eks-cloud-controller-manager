@@ -9,8 +9,11 @@ import (
 	commoneks "github.com/capitalonline/eks-cloud-controller-manager/pkg/common/eks"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	metrics "k8s.io/metrics/pkg/client/clientset/versioned"
 	"log"
@@ -141,8 +144,56 @@ func (n *NodeController) Run(ctx context.Context) error {
 	}
 }
 
+func (n *NodeController) ListenNodes(ctx context.Context) {
+	informer := cache.NewSharedIndexInformer(
+		&cache.ListWatch{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				return n.clientSet.CoreV1().Events("").List(ctx, metav1.ListOptions{})
+			},
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return n.clientSet.CoreV1().Events("").Watch(ctx, metav1.ListOptions{})
+			},
+		},
+		&v1.Event{},
+		0,
+		cache.Indexers{},
+	)
+	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			event, _ := obj.(*v1.Event)
+			if event.Reason != consts.EventNodeNotReady {
+				return
+			}
+			node, err := n.clientSet.CoreV1().Nodes().Get(ctx, event.InvolvedObject.Name, metav1.GetOptions{})
+			if err != nil || node == nil || node.Status.Phase == v1.NodeRunning {
+				return
+			}
+			if _, ok := node.Labels[consts.NodeRoleMaster]; !ok {
+				return
+			}
+			request := commoneks.NewSendAlarmRequest()
+			request.Theme = consts.K8sMetricAlarmTheme
+			request.NodeId = node.Spec.ProviderID
+			request.ClusterId = consts.ClusterId
+			request.Metric = consts.AlarmMetricMasterDown
+			request.AlarmMsg = fmt.Sprintf("集群master节点宕机，集群id:%s,宕机节点:%s", consts.ClusterId, node.Spec.ProviderID)
+			resp, err := api.NotifyMasterDown(request)
+			if err != nil || resp == nil || resp.Code != consts.EksRequestSuccess {
+				klog.Error(fmt.Sprintf("send alarm error：%v, resp:%v", err, resp))
+			}
+		},
+	})
+	stopCh := make(chan struct{})
+	go informer.Run(stopCh)
+	for {
+		select {
+		case <-ctx.Done():
+			close(stopCh)
+		}
+	}
+}
+
 func (n *NodeController) Update(ctx context.Context) error {
-	klog.Info("开始获取节点信息")
 	//config, err := rest.InClusterConfig()
 	//if err != nil {
 	//	log.Fatalf("newCloud:: Failed to create kubernetes config: %v", err)
