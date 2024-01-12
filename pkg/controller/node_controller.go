@@ -15,6 +15,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	metrics "k8s.io/metrics/pkg/client/clientset/versioned"
 	"log"
 	"time"
@@ -65,53 +66,25 @@ func (n *NodeController) CollectPlayLoad(ctx context.Context) error {
 	request.ClusterId = consts.ClusterId
 	request.NodeList = make([]commoneks.ModifyClusterLoadReqNode, 0)
 	for _, metric := range metricList.Items {
-
 		node := nodeSet[metric.Name]
-		usage := metric.Usage
-		cpuUsage := float64(usage.Cpu().MilliValue()) / float64(node.Status.Allocatable.Cpu().MilliValue())
-		memoryUsage := float64(usage.Memory().MilliValue()) / float64(node.Status.Allocatable.Memory().MilliValue())
-		//cpuRequests := float64(usage.Cpu().MilliValue())/float64(node.Status)
-		var (
-			requestCpu int64
-			requestMem int64
-			limitCpu   int64
-			limitMem   int64
-			allCpu     = node.Status.Allocatable.Cpu().MilliValue()
-			allMem     = node.Status.Allocatable.Memory().MilliValue()
-			status     = "NotReady"
-		)
-
-		for i := 0; i < len(node.Status.Conditions); i++ {
-			condition := node.Status.Conditions[i]
-			if condition.Type == "Ready" {
-				if condition.Status == "True" {
-					status = "Ready"
-				}
-			}
-		}
-		pods, _ := n.clientSet.CoreV1().Pods(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("spec.nodeName=%s", node.Name)})
-		for _, pod := range pods.Items {
-			for _, container := range pod.Spec.Containers {
-				requestCpu += container.Resources.Requests.Cpu().MilliValue()
-				requestMem += container.Resources.Requests.Memory().MilliValue()
-				limitCpu += container.Resources.Limits.Cpu().MilliValue()
-				limitMem += container.Resources.Limits.Cpu().MilliValue()
-			}
+		load, err := n.CalculateLoad(metric, node)
+		if err != nil {
+			continue
 		}
 		request.NodeList = append(request.NodeList, commoneks.ModifyClusterLoadReqNode{
 			NodeId:   node.Spec.ProviderID,
 			NodeName: node.Name,
 			Cpu: commoneks.ResourceInfo{
-				Usage:    int64(cpuUsage * 100),
-				Limits:   int64(float64(limitCpu) / float64(allCpu) * 100),
-				Requests: int64(float64(requestCpu) / float64(allCpu) * 100),
+				Usage:    load.Cpu.Usage,
+				Limits:   load.Cpu.Limits,
+				Requests: load.Cpu.Requests,
 			},
 			Memory: commoneks.ResourceInfo{
-				Usage:    int64(memoryUsage * 100),
-				Limits:   int64(float64(limitMem) / float64(allMem) * 100),
-				Requests: int64(float64(requestMem) / float64(allMem) * 100),
+				Usage:    load.Mem.Usage,
+				Limits:   load.Mem.Limits,
+				Requests: load.Mem.Requests,
 			},
-			Status: status,
+			Status: load.Status,
 		})
 	}
 	_, err = api.ModifyClusterLoad(request)
@@ -121,6 +94,53 @@ func (n *NodeController) CollectPlayLoad(ctx context.Context) error {
 	}
 	klog.Info("更新节点负载成功")
 	return nil
+}
+
+func (n *NodeController) CalculateLoad(metric v1beta1.NodeMetrics, node v1.Node) (commoneks.NodeLoad, error) {
+	usage := metric.Usage
+	cpuUsage := float64(usage.Cpu().MilliValue()) / float64(node.Status.Allocatable.Cpu().MilliValue())
+	memoryUsage := float64(usage.Memory().MilliValue()) / float64(node.Status.Allocatable.Memory().MilliValue())
+	//cpuRequests := float64(usage.Cpu().MilliValue())/float64(node.Status)
+	var (
+		requestCpu int64
+		requestMem int64
+		limitCpu   int64
+		limitMem   int64
+		allCpu     = node.Status.Allocatable.Cpu().MilliValue()
+		allMem     = node.Status.Allocatable.Memory().MilliValue()
+		status     = "NotReady"
+	)
+
+	for i := 0; i < len(node.Status.Conditions); i++ {
+		condition := node.Status.Conditions[i]
+		if condition.Type == "Ready" {
+			if condition.Status == "True" {
+				status = "Ready"
+			}
+		}
+	}
+	pods, _ := n.clientSet.CoreV1().Pods(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("spec.nodeName=%s", node.Name)})
+	for _, pod := range pods.Items {
+		for _, container := range pod.Spec.Containers {
+			requestCpu += container.Resources.Requests.Cpu().MilliValue()
+			requestMem += container.Resources.Requests.Memory().MilliValue()
+			limitCpu += container.Resources.Limits.Cpu().MilliValue()
+			limitMem += container.Resources.Limits.Cpu().MilliValue()
+		}
+	}
+	return commoneks.NodeLoad{
+		Cpu: commoneks.ResourceInfo{
+			Usage:    int64(cpuUsage * 100),
+			Limits:   int64(float64(limitCpu) / float64(allCpu) * 100),
+			Requests: int64(float64(requestCpu) / float64(allCpu) * 100),
+		},
+		Mem: commoneks.ResourceInfo{
+			Usage:    int64(memoryUsage * 100),
+			Limits:   int64(float64(limitMem) / float64(allMem) * 100),
+			Requests: int64(float64(requestMem) / float64(allMem) * 100),
+		},
+		Status: status,
+	}, nil
 }
 
 func (n *NodeController) Run(ctx context.Context) error {
@@ -161,35 +181,77 @@ func (n *NodeController) ListenNodes(ctx context.Context) {
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			event, _ := obj.(*v1.Event)
-			if event.Reason != consts.EventNodeNotReady {
-				return
-			}
-			node, err := n.clientSet.CoreV1().Nodes().Get(ctx, event.InvolvedObject.Name, metav1.GetOptions{})
-			if err != nil || node == nil || node.Status.Phase == v1.NodeRunning {
-				return
-			}
-			if _, ok := node.Labels[consts.NodeRoleMaster]; !ok {
-				return
-			}
-			request := commoneks.NewSendAlarmRequest()
-			request.Theme = consts.K8sMetricAlarmTheme
-			request.NodeId = node.Spec.ProviderID
-			request.ClusterId = consts.ClusterId
-			request.Metric = consts.AlarmMetricMasterDown
-			request.AlarmMsg = fmt.Sprintf("集群master节点宕机，集群id:%s,宕机节点:%s", consts.ClusterId, node.Spec.ProviderID)
-			resp, err := api.NotifyMasterDown(request)
-			if err != nil || resp == nil || resp.Code != consts.EksRequestSuccess {
-				klog.Error(fmt.Sprintf("send alarm error：%v, resp:%v", err, resp))
+			switch event.Reason {
+			case consts.EventNodeNotReady:
+				n.NotifyNodeDown(ctx, event)
+			case consts.EventNodeReady:
+				n.NotifyNodeReady(ctx, event)
 			}
 		},
 	})
 	stopCh := make(chan struct{})
 	go informer.Run(stopCh)
-	for {
-		select {
-		case <-ctx.Done():
-			close(stopCh)
-		}
+	<-ctx.Done()
+}
+
+func (n *NodeController) NotifyNodeReady(ctx context.Context, event *v1.Event) {
+	node, err := n.clientSet.CoreV1().Nodes().Get(ctx, event.InvolvedObject.Name, metav1.GetOptions{})
+	if err != nil || node == nil || node.Status.Phase != v1.NodeRunning {
+		return
+	}
+	metric, err := n.metricsClient.MetricsV1beta1().NodeMetricses().Get(context.Background(), node.Name, metav1.GetOptions{})
+	if err != nil || metric == nil {
+		return
+	}
+	load, err := n.CalculateLoad(*metric, *node)
+	if err != nil || metric == nil {
+		return
+	}
+
+	var request = commoneks.NewModifyClusterLoadRequest()
+	request.ClusterId = consts.ClusterId
+	request.NodeList = []commoneks.ModifyClusterLoadReqNode{
+		{
+			NodeId: node.Spec.ProviderID,
+			Cpu: commoneks.ResourceInfo{
+				Usage:    load.Cpu.Usage,
+				Limits:   load.Cpu.Limits,
+				Requests: load.Cpu.Requests,
+			},
+			Memory: commoneks.ResourceInfo{
+				Usage:    load.Mem.Usage,
+				Limits:   load.Mem.Limits,
+				Requests: load.Mem.Requests,
+			},
+			Status:   load.Status,
+			NodeName: node.Name,
+		},
+	}
+	_, err = api.ModifyClusterLoad(request)
+	if err != nil {
+		klog.Info("上报节点Ready失败，err:", err)
+	}
+	return
+}
+
+func (n *NodeController) NotifyNodeDown(ctx context.Context, event *v1.Event) {
+	node, err := n.clientSet.CoreV1().Nodes().Get(ctx, event.InvolvedObject.Name, metav1.GetOptions{})
+	if err != nil || node == nil || node.Status.Phase == v1.NodeRunning {
+		return
+	}
+	// worker节点忽略
+	if _, ok := node.Labels[consts.NodeRoleMaster]; !ok {
+		return
+	}
+	request := commoneks.NewSendAlarmRequest()
+	request.Theme = consts.K8sMetricAlarmTheme
+	request.NodeId = node.Spec.ProviderID
+	request.ClusterId = consts.ClusterId
+	request.Metric = consts.AlarmMetricMasterDown
+	request.AlarmMsg = fmt.Sprintf("集群master节点宕机，集群id:%s,宕机节点:%s", consts.ClusterId, node.Spec.ProviderID)
+	resp, err := api.NotifyMasterDown(request)
+	if err != nil || resp == nil || resp.Code != consts.EksRequestSuccess {
+		klog.Error(fmt.Sprintf("send alarm error：%v, resp:%v", err, resp))
 	}
 }
 

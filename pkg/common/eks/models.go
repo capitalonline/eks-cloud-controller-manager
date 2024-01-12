@@ -140,6 +140,12 @@ type ModifyClusterLoadReqNode struct {
 	NodeName string       `json:"-"`
 }
 
+type NodeLoad struct {
+	Cpu    ResourceInfo `json:"Cpu"`
+	Mem    ResourceInfo `json:"Mem"`
+	Status string       `json:"Status"`
+}
+
 type ResourceInfo struct {
 	Usage    int64 `json:"Usage"`
 	Limits   int64 `json:"Limits"`

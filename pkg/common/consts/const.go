@@ -54,7 +54,10 @@ const (
 	NodeStatusRunning = "running"
 )
 
-const EventNodeNotReady = "NodeNotReady"
+const (
+	EventNodeNotReady = "NodeNotReady"
+	EventNodeReady    = "NodeReady"
+)
 
 const NodeRoleMaster = "node-role.kubernetes.io/master"
 
