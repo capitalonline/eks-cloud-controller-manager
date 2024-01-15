@@ -18,6 +18,7 @@ import (
 	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	metrics "k8s.io/metrics/pkg/client/clientset/versioned"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -230,29 +231,50 @@ func (n *NodeController) NotifyNodeReady(ctx context.Context, event *v1.Event) {
 	_, err = api.ModifyClusterLoad(request)
 	if err != nil {
 		klog.Info("上报节点Ready失败，err:", err)
+		return
 	}
 	return
 }
 
 func (n *NodeController) NotifyNodeDown(ctx context.Context, event *v1.Event) {
 	node, err := n.clientSet.CoreV1().Nodes().Get(ctx, event.InvolvedObject.Name, metav1.GetOptions{})
-	if err != nil || node == nil || node.Status.Phase == v1.NodeRunning {
+	if err != nil || node == nil || node.Status.Phase == v1.NodeRunning || NodeReady(*node) {
 		return
 	}
 	// worker节点忽略
 	if _, ok := node.Labels[consts.NodeRoleMaster]; !ok {
 		return
 	}
+	ip := node.Name
+	if len(strings.Split(node.Name, "-")) > 1 {
+		ip = strings.Split(node.Name, "-")[1]
+	}
 	request := commoneks.NewSendAlarmRequest()
 	request.Theme = consts.K8sMetricAlarmTheme
 	request.NodeId = node.Spec.ProviderID
 	request.ClusterId = consts.ClusterId
 	request.Metric = consts.AlarmMetricMasterDown
-	request.AlarmMsg = fmt.Sprintf("集群master节点宕机，集群id:%s,宕机节点:%s", consts.ClusterId, node.Spec.ProviderID)
+	request.Source = consts.AlarmSource
+	request.AlarmMsg = fmt.Sprintf("集群master节点宕机,宕机NotReady:%s ,ip:%s", node.Spec.ProviderID, ip)
+	request.Tags = []interface{}{}
+	request.Keyword = node.Name
+	request.Value = ip
 	resp, err := api.NotifyMasterDown(request)
 	if err != nil || resp == nil || resp.Code != consts.EksRequestSuccess {
 		klog.Error(fmt.Sprintf("send alarm error：%v, resp:%v", err, resp))
 	}
+}
+
+func NodeReady(node v1.Node) bool {
+	if len(node.Status.Conditions) < 1 {
+		return true
+	}
+	for _, condition := range node.Status.Conditions {
+		if condition.Type == v1.NodeReady && condition.Status == v1.ConditionTrue {
+			return true
+		}
+	}
+	return false
 }
 
 func (n *NodeController) Update(ctx context.Context) error {
@@ -307,13 +329,11 @@ func UpdateNode(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) (bool,
 	labelFlag := UpdateNodeLabels(node, detail)
 	taintFlag := UpdateNodeTaints(node, detail)
 	annotationFlag := UpdateNodeAnnotations(node, detail)
-	klog.Info(fmt.Sprintf("更新节点%s,labelFlag:%v,taintFlag:%v,annotationFlag:%v", node.Name, labelFlag, taintFlag, annotationFlag))
 	return labelFlag || taintFlag || annotationFlag, nil
 }
 
 // UpdateNodeLabels 更新节点标签
 func UpdateNodeLabels(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) bool {
-	klog.Info(fmt.Sprintf("更新节点%s的标签,原标签：%v, eks标签：%v", node.Name, node.Labels, detail.Labels))
 	if len(detail.Labels) == 0 {
 		return false
 	}
@@ -333,7 +353,6 @@ func UpdateNodeLabels(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) 
 
 // UpdateNodeTaints 修改节点的污点
 func UpdateNodeTaints(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) bool {
-	klog.Info(fmt.Sprintf("更新节点%s的污点,原污点：%v, eks污点：%v", node.Name, node.Spec.Taints, detail.Taints))
 
 	taints := make([]v1.Taint, 0, 0)
 	taintMap := make(map[string]v1.Taint)
@@ -365,7 +384,6 @@ func UpdateNodeTaints(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) 
 
 // UpdateNodeAnnotations 修改节点的污点
 func UpdateNodeAnnotations(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) bool {
-	klog.Info(fmt.Sprintf("更新节点%s的注释,原注释：%v, eks注释：%v", node.Name, node.Spec.Taints, detail.Taints))
 	annotations := make(map[string]string)
 	if len(detail.Annotations) == 0 {
 		return false

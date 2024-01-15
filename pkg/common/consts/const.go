@@ -70,3 +70,7 @@ const (
 	K8sErrAlarmTheme    = "K8sErrAlarm"
 	K8sMetricAlarmTheme = "K8sMetricAlarm"
 )
+
+const (
+	AlarmSource = "cloud-controller-manager"
+)
