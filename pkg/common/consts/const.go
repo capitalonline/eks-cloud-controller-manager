@@ -59,6 +59,11 @@ const (
 	EventNodeReady    = "NodeReady"
 )
 
+const (
+	NodeStatusReady    = "Ready"
+	NodeStatusNotReady = "NotReady"
+)
+
 const NodeRoleMaster = "node-role.kubernetes.io/master"
 
 const (
@@ -74,3 +79,5 @@ const (
 const (
 	AlarmSource = "cloud-controller-manager"
 )
+
+const ResourceKindNode = "Node"

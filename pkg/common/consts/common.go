@@ -6,8 +6,8 @@ import (
 )
 
 var (
-	AccessKeyID     string = "ef646cc6132011eeaff59a519b3265fd"
-	AccessKeySecret string = "0700d013dd2e4dd96d975de9694c0ccb"
+	AccessKeyID     string = ""
+	AccessKeySecret string = ""
 	Region          string
 	Az              string
 	ClusterId       string

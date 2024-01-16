@@ -2,15 +2,16 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/api"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
 	commoneks "github.com/capitalonline/eks-cloud-controller-manager/pkg/common/eks"
 	v1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
@@ -75,12 +76,12 @@ func (n *NodeController) CollectPlayLoad(ctx context.Context) error {
 		request.NodeList = append(request.NodeList, commoneks.ModifyClusterLoadReqNode{
 			NodeId:   node.Spec.ProviderID,
 			NodeName: node.Name,
-			Cpu: commoneks.ResourceInfo{
+			Cpu: &commoneks.ResourceInfo{
 				Usage:    load.Cpu.Usage,
 				Limits:   load.Cpu.Limits,
 				Requests: load.Cpu.Requests,
 			},
-			Memory: commoneks.ResourceInfo{
+			Memory: &commoneks.ResourceInfo{
 				Usage:    load.Mem.Usage,
 				Limits:   load.Mem.Limits,
 				Requests: load.Mem.Requests,
@@ -109,17 +110,19 @@ func (n *NodeController) CalculateLoad(metric v1beta1.NodeMetrics, node v1.Node)
 		limitMem   int64
 		allCpu     = node.Status.Allocatable.Cpu().MilliValue()
 		allMem     = node.Status.Allocatable.Memory().MilliValue()
-		status     = "NotReady"
+		//status     = "NotReady"
+		status = consts.NodeStatusNotReady
 	)
-
-	for i := 0; i < len(node.Status.Conditions); i++ {
-		condition := node.Status.Conditions[i]
-		if condition.Type == "Ready" {
-			if condition.Status == "True" {
-				status = "Ready"
-			}
-		}
+	if NodeReady(node) {
+		status = consts.NodeStatusReady
 	}
+
+	//for i := 0; i < len(node.Status.Conditions); i++ {
+	//	condition := node.Status.Conditions[i]
+	//	if condition.Type == v1.NodeReady && condition.Status == v1.ConditionTrue {
+	//		status = consts.NodeStatusReady
+	//	}
+	//}
 	pods, _ := n.clientSet.CoreV1().Pods(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("spec.nodeName=%s", node.Name)})
 	for _, pod := range pods.Items {
 		for _, container := range pod.Spec.Containers {
@@ -166,19 +169,59 @@ func (n *NodeController) Run(ctx context.Context) error {
 }
 
 func (n *NodeController) ListenNodes(ctx context.Context) {
-	informer := cache.NewSharedIndexInformer(
-		&cache.ListWatch{
-			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-				return n.clientSet.CoreV1().Events("").List(ctx, metav1.ListOptions{})
-			},
-			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-				return n.clientSet.CoreV1().Events("").Watch(ctx, metav1.ListOptions{})
-			},
-		},
-		&v1.Event{},
-		0,
-		cache.Indexers{},
-	)
+
+	//watcher, err := n.clientSet.CoreV1().Nodes().Watch(ctx, metav1.ListOptions{
+	//	TypeMeta:      metav1.TypeMeta{},
+	//	LabelSelector: consts.NodeRoleMaster,
+	//})
+	//if err != nil {
+	//	panic(err)
+	//}
+	//for {
+	//	select {
+	//	case event := <-watcher.ResultChan():
+	//		MasterEventHandler(event)
+	//	}
+	//}
+
+	//podEventHandler := cache.ResourceEventHandlerFuncs{
+	//	AddFunc: func(obj interface{}) {
+	//		event, _ := obj.(*v1.Event)
+	//		switch event.Reason {
+	//		case consts.EventNodeNotReady:
+	//			n.NotifyNodeDown(ctx, event)
+	//		case consts.EventNodeReady:
+	//			n.NotifyNodeReady(ctx, event)
+	//		}
+	//	},
+	//}
+	//
+	//// 创建 Pod 的监听器
+	//eventListWatcher := cache.NewListWatchFromClient(n.clientSet.CoreV1().RESTClient(), "event", metav1.NamespaceAll, nil)
+	//_, controller := cache.NewInformer(eventListWatcher, &v1.Event{}, time.Second*0, podEventHandler)
+	//
+	//// 启动监听器
+	//stop := make(chan struct{})
+	//defer close(stop)
+	//go controller.Run(stop)
+
+	factory := informers.NewSharedInformerFactory(n.clientSet, 0)
+	//informer := cache.NewSharedIndexInformer(
+	//	&cache.ListWatch{
+	//		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+	//			return n.clientSet.CoreV1().Events("").List(ctx, metav1.ListOptions{})
+	//		},
+	//		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+	//			return n.clientSet.CoreV1().Events("").Watch(ctx, metav1.ListOptions{})
+	//		},
+	//	},
+	//	&v1.Event{},
+	//	0,
+	//	cache.Indexers{},
+	//)
+	informer := factory.Core().V1().Events().Informer()
+	stopCh := make(chan struct{})
+	factory.Core().V1().Events().Lister()
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			event, _ := obj.(*v1.Event)
@@ -189,88 +232,310 @@ func (n *NodeController) ListenNodes(ctx context.Context) {
 				n.NotifyNodeReady(ctx, event)
 			}
 		},
-	})
-	stopCh := make(chan struct{})
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			event, _ := newObj.(*v1.Event)
+			klog.Infof("update event %s ", event.Reason)
+			switch event.Reason {
+			case consts.EventNodeNotReady:
+				n.NotifyNodeDown(ctx, event)
+			case consts.EventNodeReady:
+				n.NotifyNodeReady(ctx, event)
+			}
+		},
+		DeleteFunc: func(obj interface{}) {
+			event, _ := obj.(*v1.Event)
+			klog.Errorf("delete event %s", event.Reason)
+		},
+	},
+	)
+
+	factory.Start(stopCh)
+	if !cache.WaitForCacheSync(stopCh, informer.HasSynced) {
+		klog.Errorf("同步事件失败")
+		return
+	}
+	fmt.Println("informer run")
 	go informer.Run(stopCh)
 	<-ctx.Done()
 }
 
+//func (n *NodeController) MasterEventHandler(ctx context.Context, event watch.Event) {
+//	if event.Type != watch.Modified {
+//		return
+//	}
+//	node, ok := event.Object.(*v1.Node)
+//	if !ok {
+//		klog.Info("Received unexpected object type")
+//		return
+//	}
+//	if NodeReady(*node) {
+//
+//	}
+//
+//}
+
+//func (n *NodeController) NotifyNodeReady(ctx context.Context, node *v1.Node) {
+//
+//	if node == nil || !NodeReady(*node) {
+//		return
+//	}
+//
+//	var request = commoneks.NewModifyClusterLoadRequest()
+//	request.ClusterId = consts.ClusterId
+//	request.NodeList = []commoneks.ModifyClusterLoadReqNode{
+//		{
+//			NodeId:   node.Spec.ProviderID,
+//			Status:   consts.NodeStatusReady,
+//			NodeName: node.Name,
+//		},
+//	}
+//	_, err := api.ModifyClusterLoad(request)
+//	if err != nil {
+//		klog.Errorf("notify NodeReady failed，err:%v", err)
+//		return
+//	}
+//	recordName := fmt.Sprintf("cc-%s-down", node.Name)
+//	if err = n.clientSet.CoreV1().Events(v1.NamespaceDefault).Delete(ctx, recordName, metav1.DeleteOptions{}); err != nil && !kerrors.IsNotFound(err) {
+//		klog.Errorf("delete event %s err:%s", recordName, err.Error())
+//	}
+//	return
+//}
+
+//func (n *NodeController) NotifyNodeDown(ctx context.Context, node *v1.Node) {
+//
+//	// worker节点忽略
+//	if _, ok := node.Labels[consts.NodeRoleMaster]; !ok {
+//		return
+//	}
+//	recordName := fmt.Sprintf("cc-%s-down", node.Name)
+//	record, err := n.clientSet.CoreV1().Events(v1.NamespaceDefault).Get(ctx, recordName, metav1.GetOptions{})
+//	if err != nil && !kerrors.IsNotFound(err) {
+//		klog.Errorf("get ccm event record failed, err:%s", err.Error())
+//		return
+//	}
+//	if record != nil {
+//		return
+//	}
+//	ip := node.Name
+//	if len(strings.Split(node.Name, "-")) > 1 {
+//		ip = strings.Split(node.Name, "-")[1]
+//	}
+//
+//	var req = commoneks.NewModifyClusterLoadRequest()
+//	req.ClusterId = consts.ClusterId
+//	req.NodeList = []commoneks.ModifyClusterLoadReqNode{
+//		{
+//			NodeId:   node.Spec.ProviderID,
+//			Status:   consts.NodeStatusNotReady,
+//			NodeName: node.Name,
+//		},
+//	}
+//	if _, err = api.ModifyClusterLoad(req); err != nil {
+//		klog.Errorf("report node %s status failed,err:%v", node.Name, err)
+//		return
+//	}
+//
+//	request := commoneks.NewSendAlarmRequest()
+//	request.Theme = consts.K8sMetricAlarmTheme
+//	request.NodeId = node.Spec.ProviderID
+//	request.ClusterId = consts.ClusterId
+//	request.Metric = consts.AlarmMetricMasterDown
+//	request.Source = consts.AlarmSource
+//	request.AlarmMsg = fmt.Sprintf("集群%s节点NotReady", node.Name)
+//	request.Tags = []interface{}{}
+//	request.Keyword = node.Name
+//	request.Value = ip
+//	fmt.Printf("节点%s宕机", node.Name)
+//	resp, err := api.NotifyMasterDown(request)
+//	if err != nil || resp == nil || resp.Code != consts.EksRequestSuccess {
+//		klog.Error(fmt.Sprintf("send alarm error：%v, resp:%v", err, resp))
+//		return
+//	}
+//	record = &v1.Event{
+//		TypeMeta: metav1.TypeMeta{},
+//		ObjectMeta: metav1.ObjectMeta{
+//			Name:      recordName,
+//			Namespace: v1.NamespaceDefault,
+//		},
+//		InvolvedObject: v1.ObjectReference{
+//			Kind:      node.Kind,
+//			Namespace: node.Namespace,
+//			Name:      node.Name,
+//		},
+//		Reason:  consts.EventNodeNotReady,
+//		Message: fmt.Sprintf("master %s down", node.Name),
+//		Source: v1.EventSource{
+//			Component: "cloud-ctroller-manager",
+//			Host:      ip,
+//		},
+//		FirstTimestamp: metav1.Now(),
+//		LastTimestamp:  metav1.Time{Time: time.Now()},
+//		Count:          1,
+//		Type:           v1.EventTypeNormal,
+//		EventTime: metav1.MicroTime{
+//			Time: time.Now(),
+//		},
+//	}
+//	_, err = n.clientSet.CoreV1().Events(v1.NamespaceDefault).Create(ctx, record, metav1.CreateOptions{})
+//	if err != nil && !kerrors.IsAlreadyExists(err) {
+//		klog.Errorf("crate event %s err:%s", recordName, err.Error())
+//	}
+//}
+
 func (n *NodeController) NotifyNodeReady(ctx context.Context, event *v1.Event) {
+	klog.Info("notify node ready")
+	if event.InvolvedObject.Kind != consts.ResourceKindNode || event.Namespace != v1.NamespaceDefault {
+		return
+	}
 	node, err := n.clientSet.CoreV1().Nodes().Get(ctx, event.InvolvedObject.Name, metav1.GetOptions{})
-	if err != nil || node == nil || node.Status.Phase != v1.NodeRunning {
+	if err != nil || node == nil || !NodeReady(*node) {
 		return
 	}
-	metric, err := n.metricsClient.MetricsV1beta1().NodeMetricses().Get(context.Background(), node.Name, metav1.GetOptions{})
-	if err != nil || metric == nil {
-		return
-	}
-	load, err := n.CalculateLoad(*metric, *node)
-	if err != nil || metric == nil {
-		return
-	}
+	//metric, err := n.metricsClient.MetricsV1beta1().NodeMetricses().Get(context.Background(), node.Name, metav1.GetOptions{})
+	//if err != nil || metric == nil {
+	//	klog.Errorf("get node metric failed, err:%v", err)
+	//	return
+	//}
+	//load, err := n.CalculateLoad(*metric, *node)
+	//if err != nil || metric == nil {
+	//	return
+	//}
 
 	var request = commoneks.NewModifyClusterLoadRequest()
 	request.ClusterId = consts.ClusterId
 	request.NodeList = []commoneks.ModifyClusterLoadReqNode{
 		{
-			NodeId: node.Spec.ProviderID,
-			Cpu: commoneks.ResourceInfo{
-				Usage:    load.Cpu.Usage,
-				Limits:   load.Cpu.Limits,
-				Requests: load.Cpu.Requests,
-			},
-			Memory: commoneks.ResourceInfo{
-				Usage:    load.Mem.Usage,
-				Limits:   load.Mem.Limits,
-				Requests: load.Mem.Requests,
-			},
-			Status:   load.Status,
+			NodeId:   node.Spec.ProviderID,
+			Status:   consts.NodeStatusReady,
 			NodeName: node.Name,
 		},
 	}
 	_, err = api.ModifyClusterLoad(request)
 	if err != nil {
-		klog.Info("上报节点Ready失败，err:", err)
+		klog.Errorf("notify NodeReady failed，err:%v", err)
 		return
+	}
+	recordName := fmt.Sprintf("ccm-%s-down", node.Name)
+	if err = n.clientSet.CoreV1().Events(v1.NamespaceDefault).Delete(ctx, recordName, metav1.DeleteOptions{}); err != nil && !kerrors.IsNotFound(err) {
+		klog.Errorf("delete event %s err:%s", recordName, err.Error())
 	}
 	return
 }
 
 func (n *NodeController) NotifyNodeDown(ctx context.Context, event *v1.Event) {
-	node, err := n.clientSet.CoreV1().Nodes().Get(ctx, event.InvolvedObject.Name, metav1.GetOptions{})
-	if err != nil || node == nil || node.Status.Phase == v1.NodeRunning || NodeReady(*node) {
+	klog.Info("notify down")
+	if event.Source.Component != "node-controller" || event.Namespace != v1.NamespaceDefault {
+		klog.Errorf("event source is not node-controller")
 		return
 	}
+	klog.Info("event is ok")
+	node, err := n.clientSet.CoreV1().Nodes().Get(ctx, event.InvolvedObject.Name, metav1.GetOptions{})
+	if err != nil || node == nil || NodeReady(*node) || !NodeUnreachable(*node) {
+		data, _ := json.Marshal(node)
+		klog.Infof("err: %v,node ready %v, Unreachable:%v, node:%s", err, NodeReady(*node), NodeUnreachable(*node), string(data))
+		return
+	}
+	klog.Info("node is unhealth")
 	// worker节点忽略
 	if _, ok := node.Labels[consts.NodeRoleMaster]; !ok {
+		return
+	}
+
+	recordName := fmt.Sprintf("ccm-%s-down", node.Name)
+	record, err := n.clientSet.CoreV1().Events(v1.NamespaceDefault).Get(ctx, recordName, metav1.GetOptions{})
+	if err != nil && !kerrors.IsNotFound(err) {
+		klog.Errorf("get ccm event record failed, err:%s", err.Error())
+		return
+	}
+	klog.Infof("record %s not found", recordName)
+	if record != nil && record.Name == recordName {
+		data, _ := json.Marshal(record)
+		klog.Infof("record %s is not nil,record: %s", recordName, string(data))
 		return
 	}
 	ip := node.Name
 	if len(strings.Split(node.Name, "-")) > 1 {
 		ip = strings.Split(node.Name, "-")[1]
 	}
+
+	var req = commoneks.NewModifyClusterLoadRequest()
+	req.ClusterId = consts.ClusterId
+	req.NodeList = []commoneks.ModifyClusterLoadReqNode{
+		{
+			NodeId:   node.Spec.ProviderID,
+			Status:   consts.NodeStatusNotReady,
+			NodeName: node.Name,
+		},
+	}
+	if _, err = api.ModifyClusterLoad(req); err != nil {
+		klog.Errorf("report node %s status failed,err:%v", node.Name, err)
+		return
+	}
+	klog.Info("report status success")
 	request := commoneks.NewSendAlarmRequest()
 	request.Theme = consts.K8sMetricAlarmTheme
 	request.NodeId = node.Spec.ProviderID
 	request.ClusterId = consts.ClusterId
 	request.Metric = consts.AlarmMetricMasterDown
 	request.Source = consts.AlarmSource
-	request.AlarmMsg = fmt.Sprintf("集群master节点宕机,宕机NotReady:%s ,ip:%s", node.Spec.ProviderID, ip)
+	request.AlarmMsg = fmt.Sprintf("集群%s节点NotReady", node.Name)
 	request.Tags = []interface{}{}
 	request.Keyword = node.Name
 	request.Value = ip
+	klog.Errorf("节点%s宕机", node.Name)
 	resp, err := api.NotifyMasterDown(request)
 	if err != nil || resp == nil || resp.Code != consts.EksRequestSuccess {
 		klog.Error(fmt.Sprintf("send alarm error：%v, resp:%v", err, resp))
+		return
 	}
+	record = &v1.Event{
+		TypeMeta: metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      recordName,
+			Namespace: v1.NamespaceDefault,
+		},
+		InvolvedObject: v1.ObjectReference{
+			Kind:      event.InvolvedObject.Kind,
+			Namespace: event.InvolvedObject.Namespace,
+			Name:      event.InvolvedObject.Name,
+		},
+		Reason:  consts.EventNodeNotReady,
+		Message: fmt.Sprintf("master %s down", node.Name),
+		Source: v1.EventSource{
+			Component: "cloud-ctroller-manager",
+			Host:      ip,
+		},
+		FirstTimestamp: event.FirstTimestamp,
+		LastTimestamp:  metav1.Time{Time: time.Now()},
+		Count:          1,
+		Type:           v1.EventTypeNormal,
+		EventTime:      event.EventTime,
+	}
+	_, err = n.clientSet.CoreV1().Events(v1.NamespaceDefault).Create(ctx, record, metav1.CreateOptions{})
+	if err != nil && !kerrors.IsAlreadyExists(err) {
+		klog.Errorf("crate event %s err:%s", recordName, err.Error())
+	}
+	klog.Info("notify down success")
 }
 
 func NodeReady(node v1.Node) bool {
 	if len(node.Status.Conditions) < 1 {
-		return true
+		return false
 	}
 	for _, condition := range node.Status.Conditions {
 		if condition.Type == v1.NodeReady && condition.Status == v1.ConditionTrue {
+			return true
+		}
+	}
+	return false
+}
+
+func NodeUnreachable(node v1.Node) bool {
+	if len(node.Spec.Taints) < 1 {
+		return false
+	}
+	for _, taint := range node.Spec.Taints {
+		if taint.Key == v1.TaintNodeUnreachable {
 			return true
 		}
 	}
