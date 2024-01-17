@@ -19,6 +19,10 @@ rules:
       - create
       - patch
       - update
+      - list
+      - watch
+      - get
+      - delete
   - apiGroups:
       - ""
       - "metrics.k8s.io"
@@ -217,8 +221,29 @@ spec:
               - matchExpressions:
                   - key: node-role.kubernetes.io/control-plane
                     operator: Exists
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - eks-cloud-controller-manager
+              topologyKey: kubernetes.io/hostname
       tolerations:
-        - operator: Exists
+        - key: node-role.kubernetes.io/master
           effect: NoSchedule
-
+          operator: Exists
+          tolerationSeconds: 10
+        - key: node-role.eks.net/infra
+          operator: Exists
+          effect: NoSchedule
+        - effect: NoExecute
+          key: node.kubernetes.io/not-ready
+          operator: Exists
+          tolerationSeconds: 30
+        - effect: NoExecute
+          key: node.kubernetes.io/unreachable
+          operator: Exists
+          tolerationSeconds: 30
 
