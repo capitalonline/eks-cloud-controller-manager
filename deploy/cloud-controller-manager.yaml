@@ -196,7 +196,7 @@ spec:
                   key: vpc_id
           #image: registry-bj.capitalonline.net/cck/cdscloud-controller-manager:v1.0.4
           #          image: eks-cloud-controller-manager:v1.0.0
-          image: registry-bj.capitalonline.net/eks/eks-cloud-controller-manager:v0.0.2
+          image: harbor-dev.yun-paas.com/test/eks-cloud-controller-manager:v1.0.0
           #          imagePullPolicy: IfNotPresent
           imagePullPolicy: Always
           name: cds-cloud-controller-manager
