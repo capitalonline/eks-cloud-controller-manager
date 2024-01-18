@@ -234,7 +234,6 @@ spec:
         - key: node-role.kubernetes.io/master
           effect: NoSchedule
           operator: Exists
-          tolerationSeconds: 10
         - key: node-role.eks.net/infra
           operator: Exists
           effect: NoSchedule
