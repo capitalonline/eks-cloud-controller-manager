@@ -87,3 +87,26 @@ func (c *Client) ModifyClusterLoad(request *ModifyClusterLoadRequest) (response 
 	err = c.Send(request, response)
 	return
 }
+
+func (c *Client) SendAlarm(request *SendAlarmRequest) (response *SendAlarmResponse, err error) {
+	if request == nil {
+		request = NewSendAlarmRequest()
+	}
+	response = NewSendAlarmResponse()
+	err = c.Send(request, response)
+	return
+}
+
+func NewSendAlarmRequest() (request *SendAlarmRequest) {
+	request = &SendAlarmRequest{
+		BaseRequest: &cdshttp.BaseRequest{},
+	}
+	request.SetDomain(consts.ApiHost)
+	request.Init().WithApiInfo(consts.ServiceEKS, consts.ApiVersion, consts.ActionSendAlarm)
+	return
+}
+
+func NewSendAlarmResponse() (response *SendAlarmResponse) {
+	response = &SendAlarmResponse{BaseResponse: &cdshttp.BaseResponse{}}
+	return
+}

@@ -133,11 +133,17 @@ type ModifyClusterLoadResponse struct {
 }
 
 type ModifyClusterLoadReqNode struct {
-	NodeId   string       `json:"NodeId"`
-	Cpu      ResourceInfo `json:"Cpu"`
-	Memory   ResourceInfo `json:"Memory"`
-	Status   string       `json:"Status"`
-	NodeName string       `json:"-"`
+	NodeId   string        `json:"NodeId"`
+	Cpu      *ResourceInfo `json:"Cpu,omitempty"`
+	Memory   *ResourceInfo `json:"Memory,omitempty"`
+	Status   string        `json:"Status"`
+	NodeName string        `json:"-"`
+}
+
+type NodeLoad struct {
+	Cpu    ResourceInfo `json:"Cpu"`
+	Mem    ResourceInfo `json:"Mem"`
+	Status string       `json:"Status"`
 }
 
 type ResourceInfo struct {
@@ -152,5 +158,42 @@ func (resp *ModifyClusterLoadResponse) ToJsonString() string {
 }
 
 func (resp *ModifyClusterLoadResponse) FromJsonString(s string) error {
+	return json.Unmarshal([]byte(s), &resp)
+}
+
+type SendAlarmRequest struct {
+	*cdshttp.BaseRequest
+	Theme     string        `json:"Theme"`
+	ClusterId string        `json:"ClusterId"`
+	NodeId    string        `json:"NodeId"`
+	Source    string        `json:"Source"`
+	Keyword   string        `json:"Keyword"`
+	Metric    string        `json:"Metric"`
+	Value     interface{}   `json:"Value"`
+	Tags      []interface{} `json:"Tags"`
+	AlarmMsg  string        `json:"AlarmMsg"`
+}
+
+func (req *SendAlarmRequest) ToJsonString() string {
+	b, _ := json.Marshal(req)
+	return string(b)
+}
+
+func (req *SendAlarmRequest) FromJsonString(s string) error {
+	return json.Unmarshal([]byte(s), &req)
+}
+
+type SendAlarmResponse struct {
+	*cdshttp.BaseResponse
+	Code string `json:"Code"`
+	Msg  string `json:"Msg"`
+}
+
+func (resp *SendAlarmResponse) ToJsonString() string {
+	b, _ := json.Marshal(resp)
+	return string(b)
+}
+
+func (resp *SendAlarmResponse) FromJsonString(s string) error {
 	return json.Unmarshal([]byte(s), &resp)
 }

@@ -28,5 +28,6 @@ func (c *ControllerWrapper) StartNodeControllerWrapper(initContext app.Controlle
 func (c *ControllerWrapper) startNodeController(ctx context.Context, initContext app.ControllerInitContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface) (controller.Interface, bool, error) {
 	nodeController := NewNodeController()
 	go nodeController.Run(ctx)
+	go nodeController.ListenNodes(ctx)
 	return nil, true, nil
 }
