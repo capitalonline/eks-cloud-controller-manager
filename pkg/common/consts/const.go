@@ -81,3 +81,11 @@ const (
 )
 
 const ResourceKindNode = "Node"
+
+const (
+	NodeAddrTypeInternalIP = "InternalIP"
+)
+
+const (
+	NameSpaceKubeSystem = "kube-system"
+)

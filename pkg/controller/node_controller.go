@@ -8,6 +8,7 @@ import (
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/api"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
 	commoneks "github.com/capitalonline/eks-cloud-controller-manager/pkg/common/eks"
+	"github.com/go-ping/ping"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -430,16 +431,16 @@ func (n *NodeController) NotifyNodeDown(ctx context.Context, event *v1.Event) {
 	}
 	klog.Info("event is ok")
 	node, err := n.clientSet.CoreV1().Nodes().Get(ctx, event.InvolvedObject.Name, metav1.GetOptions{})
-	if err != nil || node == nil || NodeReady(*node) || !NodeUnreachable(*node) {
+	if _, ok := node.Labels[consts.NodeRoleMaster]; !ok {
+		return
+	}
+	if err != nil || node == nil || NodeHealth(*node) {
 		data, _ := json.Marshal(node)
-		klog.Infof("err: %v,node ready %v, Unreachable:%v, node:%s", err, NodeReady(*node), NodeUnreachable(*node), string(data))
+		klog.Infof("err: %v,node ready %v, Unreachable:%v,nodehealth:%v, node:%s, ", err, NodeReady(*node), NodeUnreachable(*node), NodeHealth(*node), string(data))
 		return
 	}
 	klog.Info("node is unhealth")
 	// worker节点忽略
-	if _, ok := node.Labels[consts.NodeRoleMaster]; !ok {
-		return
-	}
 
 	recordName := fmt.Sprintf("ccm-%s-down", node.Name)
 	record, err := n.clientSet.CoreV1().Events(v1.NamespaceDefault).Get(ctx, recordName, metav1.GetOptions{})
@@ -515,6 +516,7 @@ func (n *NodeController) NotifyNodeDown(ctx context.Context, event *v1.Event) {
 	if err != nil && !kerrors.IsAlreadyExists(err) {
 		klog.Errorf("crate event %s err:%s", recordName, err.Error())
 	}
+	n.clientSet.CoreV1().ConfigMaps(consts.NameSpaceKubeSystem).Get(ctx, "kubeadm-config", metav1.GetOptions{})
 	klog.Info("notify down success")
 }
 
@@ -540,6 +542,39 @@ func NodeUnreachable(node v1.Node) bool {
 		}
 	}
 	return false
+}
+
+func NodeHealth(node v1.Node) bool {
+	ip, err := NodeIP(node)
+	if err != nil {
+		return false
+	}
+	if !NodeReady(node) && NodeUnreachable(node) {
+		return false
+	}
+	pinger := ping.New(ip)
+	pinger.Count = 10
+	pinger.Timeout = time.Second * 2
+	pinger.SetPrivileged(true)
+	if err = pinger.Run(); err != nil {
+		return false
+	}
+	if pinger.Statistics().PacketLoss > 50 {
+		return false
+	}
+	return true
+}
+
+func NodeIP(node v1.Node) (string, error) {
+	if len(node.Status.Addresses) < 1 {
+		return "", errors.New("node's status.addresses is nil")
+	}
+	for _, addr := range node.Status.Addresses {
+		if addr.Type == consts.NodeAddrTypeInternalIP {
+			return addr.Address, nil
+		}
+	}
+	return "", errors.New("can not find ip")
 }
 
 func (n *NodeController) Update(ctx context.Context) error {
