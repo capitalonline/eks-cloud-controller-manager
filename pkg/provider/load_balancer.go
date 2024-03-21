@@ -27,6 +27,7 @@ const (
 	AnnotationLbBandwidth  = "service.beta.kubernetes.io/cds-load-balancer-bandwidth"
 	AnnotationLbEip        = "service.beta.kubernetes.io/cds-load-balancer-eip"
 	AnnotationLbAlgorithm  = "service.beta.kubernetes.io/cds-load-balancer-algorithm"
+	AnnotationLbSubjectId  = "service.beta.kubernetes.io/cds-load-balancer-subject-id"
 	AnnotationLbListen     = "service.eks.listen"
 	LbNetTypeWan           = "wan"
 	LbNetTypeWanLan        = "wan_lan"
@@ -181,11 +182,15 @@ func (l *LoadBalancer) EnsureLoadBalancerDeleted(ctx context.Context, clusterNam
 
 // 创建slb
 func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service, nodes []*v1.Node) (string, error) {
-
 	if len(service.Annotations) == 0 {
 		return "", errors.New("service annotations is null")
 	}
-
+	var subjectId int
+	// 测试金查询
+	if service.Annotations[AnnotationLbSubjectId] != "" {
+		i, _ := strconv.ParseInt(service.Annotations[AnnotationLbSubjectId], 10, 64)
+		subjectId = int(i)
+	}
 	// 协议
 	//proctol := service.Annotations[AnnotationLbProtocol]
 	lbType, err := strconv.ParseInt(service.Annotations[AnnotationLbType], 10, 64)
@@ -262,7 +267,7 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service, nodes
 		BillingSchemeId: billingSchemeId,
 		NetType:         LbNetTypeWan,
 		Name:            service.Name + "-" + service.Namespace + "-" + string(service.UID),
-		SubjectId:       0,
+		SubjectId:       subjectId,
 	}
 	// 查询共享带宽计费ID
 	bandwidthReq := lb.NewBandwidthBillingSchemeRequest()
@@ -307,6 +312,7 @@ outer:
 		IsToMonth:       false,
 		Duration:        0,
 		EipCount:        int(lbEip),
+		SubjectId:       subjectId,
 	}
 
 	response, err := api.PackageCreateSlb(request)
