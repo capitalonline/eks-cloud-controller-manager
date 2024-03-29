@@ -504,5 +504,9 @@ func SlbName(svcName, namespace, uid string) string {
 	hash := sha256.New()
 	hash.Write([]byte(strings.Trim(string(uid), "-")))
 	value := hash.Sum(nil)
-	return fmt.Sprintf("%s-%s-%s", svcName, namespace, hex.EncodeToString(value)[:16])
+	name := fmt.Sprintf("%s-%s-%s", svcName, namespace, hex.EncodeToString(value)[:16])
+	if len(name) > 64 {
+		name = name[len(name)-64:]
+	}
+	return name
 }
