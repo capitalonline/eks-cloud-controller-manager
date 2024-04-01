@@ -306,7 +306,7 @@ outer:
 	}
 
 	request.BandwidthInfo = lb.PackageCreateSlbBandwidthInfo{
-		Name:            "eks-" + SlbName(service.Name, service.Namespace, string(service.UID)),
+		Name:            SlbName(service.Name, service.Namespace, string(service.UID)),
 		BillingSchemeId: bandwidthBillingSchemeId,
 		Qos:             int(lbBandwidth),
 		Type:            BandwidthShared,
