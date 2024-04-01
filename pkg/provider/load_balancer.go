@@ -14,6 +14,8 @@ import (
 	"time"
 
 	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"crypto/sha256"
+	"encoding/hex"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -123,7 +125,7 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 
 	// 先查询lb是不是已经创建过了
 	request := lb.NewDescribeVpcSlbRequest()
-	request.SlbName = service.Name + "-" + service.Namespace + "-" + string(service.UID)
+	request.SlbName = SlbName(service.Name, service.Namespace, string(service.UID))
 	response, err := api.DescribeVpcSlb(request)
 	// 调用接口有问题，接口没返回json
 	if err != nil && response == nil {
@@ -153,7 +155,7 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 	}
 	// 重新查一遍slb信息
 	request = lb.NewDescribeVpcSlbRequest()
-	request.SlbName = service.Name + "-" + service.Namespace + "-" + string(service.UID)
+	request.SlbName = SlbName(service.Name, service.Namespace, string(service.UID))
 	request.SlbID = slbId
 	response, err = api.DescribeVpcSlb(request)
 	if err != nil {
@@ -266,7 +268,7 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service, nodes
 	request.SlbInfo = lb.PackageCreateSlbInfo{
 		BillingSchemeId: billingSchemeId,
 		NetType:         LbNetTypeWan,
-		Name:            service.Name + "-" + service.Namespace + "-" + string(service.UID),
+		Name:            SlbName(service.Name, service.Namespace, string(service.UID)),
 		SubjectId:       subjectId,
 	}
 	// 查询共享带宽计费ID
@@ -304,7 +306,7 @@ outer:
 	}
 
 	request.BandwidthInfo = lb.PackageCreateSlbBandwidthInfo{
-		Name:            "Bandwidth-" + service.Name + "-" + service.Namespace + "-" + string(service.UID),
+		Name:            SlbName(service.Name, service.Namespace, string(service.UID)),
 		BillingSchemeId: bandwidthBillingSchemeId,
 		Qos:             int(lbBandwidth),
 		Type:            BandwidthShared,
@@ -445,7 +447,7 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 
 func (l *LoadBalancer) clearLbListen(ctx context.Context, clusterName string, service *v1.Service) error {
 	request := lb.NewDescribeVpcSlbRequest()
-	request.SlbName = service.Name + "-" + service.Namespace + "-" + string(service.UID)
+	request.SlbName = SlbName(service.Name, service.Namespace, string(service.UID))
 	response, err := api.DescribeVpcSlb(request)
 	//klog.Info(fmt.Sprintf("清除监听：%#v ,%v", response, err))
 	if err != nil {
@@ -466,7 +468,7 @@ func (l *LoadBalancer) clearLbListen(ctx context.Context, clusterName string, se
 
 func (l *LoadBalancer) describeLbInstance(ctx context.Context, clusterName string, service *v1.Service) (*lb.DescribeVpcSlbResponse, error) {
 	request := lb.NewDescribeVpcSlbRequest()
-	request.SlbName = service.Name + "-" + service.Namespace + "-" + string(service.UID)
+	request.SlbName = SlbName(service.Name, service.Namespace, string(service.UID))
 	response, err := api.DescribeVpcSlb(request)
 	if err != nil {
 		return response, err
@@ -495,4 +497,16 @@ func (l *LoadBalancer) describeTask(taskId string) error {
 		}
 	}
 	return errors.New("任务超时")
+}
+
+// SlbName 通过hash值的方式，计算slb的名称，让slb名称具有一致性和独立性
+func SlbName(svcName, namespace, uid string) string {
+	hash := sha256.New()
+	hash.Write([]byte(strings.Trim(string(uid), "-")))
+	value := hash.Sum(nil)
+	name := fmt.Sprintf("%s-%s-%s", svcName, namespace, hex.EncodeToString(value)[:16])
+	if len(name) > 64 {
+		name = name[len(name)-64:]
+	}
+	return name
 }
