@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    service.beta.kubernetes.io/cds-load-balancer-protocol: TCP
+    service.beta.kubernetes.io/cds-load-balancer-types: "4"
+    service.beta.kubernetes.io/cds-load-balancer-specification: standard
+    service.beta.kubernetes.io/cds-load-balancer-bandwidth: "50"
+    service.beta.kubernetes.io/cds-load-balancer-eip: "1"
+    service.beta.kubernetes.io/cds-load-balancer-algorithm: rr
+    service.beta.kubernetes.io/cds-load-balancer-subject-id: "00000" # 测试金id，客户试用时试用，具体值联系管理员
+  name: lb-cluster-test
+  namespace: default
+spec:
+  externalTrafficPolicy: Cluster
+  selector:
+    app: nginx
+  ports:
+    - name: test
+      protocol: TCP
+      port: 10080
+      targetPort: 80
+  type: LoadBalancer
