@@ -409,9 +409,9 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 			DelayBeforeRetry: 30,
 		}
 		//if _, ok := listenList[string(port.NodePort)]; !ok {
-		updateList = append(createList, listen)
+		//updateList = append(createList, listen)
 		//} else {
-		//	updateList = append(updateList, listen)
+		updateList = append(updateList, listen)
 		//}
 		//newlistenInfo[string(port.NodePort)] = ""
 	}
