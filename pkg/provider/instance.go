@@ -8,9 +8,11 @@ import (
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
+	"strings"
 )
 
 type Instances struct {
@@ -23,6 +25,13 @@ func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v
 	if err != nil {
 		klog.Errorf("查询节点ip失败,err:%s", err.Error())
 		return nil, nil
+	}
+	if len(address) == 0 {
+		node, err := i.clientSet.CoreV1().Nodes().Get(ctx, string(name), metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+		return node.Status.Addresses, nil
 	}
 	nodeAddress := make([]v1.NodeAddress, 0, len(address))
 	for _, item := range address {
@@ -41,6 +50,18 @@ func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 	klog.Info(fmt.Sprintf("NodeAddressesByProviderID    providerID:%v", providerID))
 	if providerID == "" {
 		return nil, errors.New("providerID can not be empty")
+	}
+	if strings.Contains(providerID, "external-node") {
+		nodeList, err := i.clientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{
+			FieldSelector: fields.OneTermEqualSelector("spec.providerID:", providerID).String()})
+		if err != nil {
+			return nil, err
+		}
+		if len(nodeList.Items) == 0 {
+			return nil, fmt.Errorf("no nodes found")
+		}
+		node := nodeList.Items[0]
+		return node.Status.Addresses, nil
 	}
 	address, err := api.NodeAddresses(consts.ClusterId, providerID, "")
 	if err != nil {
@@ -126,6 +147,13 @@ func (i *Instances) CurrentNodeName(ctx context.Context, hostname string) (types
 
 func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID string) (bool, error) {
 	klog.Info(fmt.Sprintf("InstanceExistsByProviderID providerID:%v", providerID))
+	// 如果providerId包含
+	if len(providerID) == 0 {
+		return true, errors.New("providerID为空")
+	}
+	if strings.Contains(providerID, "external-node") {
+		return true, nil
+	}
 	address, err := api.NodeCCMInit(consts.ClusterId, providerID, "")
 	if err != nil {
 		klog.Errorf("通过openapi查询节点%s失败,err:%v", providerID, err)
