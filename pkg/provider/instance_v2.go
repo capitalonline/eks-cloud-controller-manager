@@ -27,9 +27,11 @@ func (i *InstancesV2) InstanceExists(ctx context.Context, node *v1.Node) (bool, 
 	}
 	if !apierrors.IsNotFound(err) {
 		if _, ok := node.Labels[consts.LabelExternalNode]; ok {
+			klog.Info(fmt.Sprintf("节点 providerID:%s 有LabelExternalNode标签，保留节点", node.Spec.ProviderID))
 			return true, nil
 		}
 		if time.Now().UTC().Sub(node.CreationTimestamp.Time.UTC()) < time.Minute*15 {
+			klog.Info(fmt.Sprintf("节点 providerID:%s 有创建时间小于15分钟，暂时保留节点", node.Spec.ProviderID))
 			return true, nil
 		}
 		return false, nil
