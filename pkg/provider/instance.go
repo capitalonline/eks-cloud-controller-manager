@@ -7,10 +7,12 @@ import (
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/api"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
+	"time"
 )
 
 type Instances struct {
@@ -23,6 +25,13 @@ func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v
 	if err != nil {
 		klog.Errorf("查询节点ip失败,err:%s", err.Error())
 		return nil, nil
+	}
+	if len(address) == 0 {
+		node, err := i.clientSet.CoreV1().Nodes().Get(ctx, string(name), metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+		return node.Status.Addresses, nil
 	}
 	nodeAddress := make([]v1.NodeAddress, 0, len(address))
 	for _, item := range address {
@@ -42,6 +51,7 @@ func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 	if providerID == "" {
 		return nil, errors.New("providerID can not be empty")
 	}
+
 	address, err := api.NodeAddresses(consts.ClusterId, providerID, "")
 	if err != nil {
 		klog.Errorf("查询节点ip失败,err:%s", err.Error())
@@ -56,6 +66,13 @@ func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 			Type:    v1.NodeInternalIP,
 			Address: item,
 		})
+	}
+	if len(address) == 0 {
+		node, err := i.clientSet.CoreV1().Nodes().Get(ctx, providerID, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+		return node.Status.Addresses, nil
 	}
 	return nodeAddress, nil
 }
@@ -126,6 +143,25 @@ func (i *Instances) CurrentNodeName(ctx context.Context, hostname string) (types
 
 func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID string) (bool, error) {
 	klog.Info(fmt.Sprintf("InstanceExistsByProviderID providerID:%v", providerID))
+	// 如果providerId包含
+	if len(providerID) == 0 {
+		return true, errors.New("providerID为空")
+	}
+	node, err := i.clientSet.CoreV1().Nodes().Get(ctx, providerID, metav1.GetOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return true, err
+	}
+	if !apierrors.IsNotFound(err) {
+		if _, ok := node.Labels[consts.LabelExternalNode]; ok {
+			klog.Info(fmt.Sprintf("节点 providerID:%s 有LabelExternalNode标签，保留节点", providerID))
+			return true, nil
+		}
+		if time.Now().UTC().Sub(node.CreationTimestamp.Time.UTC()) < time.Minute*15 {
+			klog.Info(fmt.Sprintf("节点 providerID:%s 有创建时间小于15分钟，暂时保留节点", providerID))
+			return true, nil
+		}
+		return false, nil
+	}
 	address, err := api.NodeCCMInit(consts.ClusterId, providerID, "")
 	if err != nil {
 		klog.Errorf("通过openapi查询节点%s失败,err:%v", providerID, err)

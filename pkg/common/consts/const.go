@@ -89,3 +89,5 @@ const (
 const (
 	NameSpaceKubeSystem = "kube-system"
 )
+
+const LabelExternalNode = "node.kubernetes.io/node.external-node"
