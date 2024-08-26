@@ -90,4 +90,16 @@ const (
 	NameSpaceKubeSystem = "kube-system"
 )
 
-const LabelExternalNode = "node.kubernetes.io/node.external-node"
+const (
+	LabelInstanceType = "node.kubernetes.io/instance-type"
+)
+
+const (
+	InstanceTypeEcs      = "ecs"
+	InstanceTypeBms      = "bms"
+	InstanceTypeExternal = "external"
+)
+
+const (
+	FieldProviderId = "spec.providerID"
+)

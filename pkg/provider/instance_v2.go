@@ -12,7 +12,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
-	"time"
+	"strings"
 )
 
 type InstancesV2 struct {
@@ -21,17 +21,18 @@ type InstancesV2 struct {
 
 func (i *InstancesV2) InstanceExists(ctx context.Context, node *v1.Node) (bool, error) {
 	klog.Info(fmt.Sprintf("InstanceExists providerID:%v", node.Spec.ProviderID))
-	_, err := i.clientSet.CoreV1().Nodes().Get(ctx, node.Spec.ProviderID, metav1.GetOptions{})
+	nodeInfo, err := i.clientSet.CoreV1().Nodes().Get(ctx, node.Spec.ProviderID, metav1.GetOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return true, err
 	}
-	if !apierrors.IsNotFound(err) {
-		if _, ok := node.Labels[consts.LabelExternalNode]; ok {
-			klog.Info(fmt.Sprintf("节点 providerID:%s 有LabelExternalNode标签，保留节点", node.Spec.ProviderID))
-			return true, nil
+	if nodeInfo != nil && nodeInfo.Labels != nil && node.Labels[consts.LabelInstanceType] != "" {
+		instanceType := node.Labels[consts.LabelInstanceType]
+		list := strings.Split(instanceType, ".")
+		if len(list) < 2 {
+			return false, fmt.Errorf("invalid instance type label")
 		}
-		if time.Now().UTC().Sub(node.CreationTimestamp.Time.UTC()) < time.Minute*15 {
-			klog.Info(fmt.Sprintf("节点 providerID:%s 有创建时间小于15分钟，暂时保留节点", node.Spec.ProviderID))
+		switch list[1] {
+		case consts.InstanceTypeEcs, consts.InstanceTypeBms, consts.InstanceTypeExternal:
 			return true, nil
 		}
 		return false, nil

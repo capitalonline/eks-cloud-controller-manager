@@ -9,10 +9,11 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
-	"time"
+	"strings"
 )
 
 type Instances struct {
@@ -110,15 +111,35 @@ func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (stri
 	}
 	for j := 0; j < len(resp.Data.Labels); j++ {
 		label := resp.Data.Labels[j]
-		if label.Key == "node.kubernetes.io/instance.type" {
-			return label.Value, err
+		//if label.Key == "node.kubernetes.io/instance.type" {
+		//	return label.Value, err
+		//}
+		if label.Key == consts.LabelInstanceType {
+			list := strings.Split(label.Value, ".")
+			if len(list) < 2 {
+				return "", fmt.Errorf("invalid instance type label")
+			}
+			return list[1], nil
 		}
+	}
+	node, err := i.clientSet.CoreV1().Nodes().Get(ctx, string(name), metav1.GetOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return "", err
+	}
+	if node != nil && node.Labels != nil && node.Labels[consts.LabelInstanceType] != "" {
+		instanceType := node.Labels[consts.LabelInstanceType]
+		list := strings.Split(instanceType, ".")
+		if len(list) < 2 {
+			return "", fmt.Errorf("invalid instance type label")
+		}
+		return list[1], nil
 	}
 	return "ecs", nil
 }
 
 func (i *Instances) InstanceTypeByProviderID(ctx context.Context, providerID string) (string, error) {
 	klog.Info(fmt.Sprintf("InstanceTypeByProviderID providerID:%v", providerID))
+	var node v1.Node
 	resp, err := api.NodeCCMInit(consts.ClusterId, providerID, "")
 	if err != nil {
 		klog.Errorf("通过openapi查询节点%s失败,err:%v", providerID, err)
@@ -126,9 +147,30 @@ func (i *Instances) InstanceTypeByProviderID(ctx context.Context, providerID str
 	}
 	for j := 0; j < len(resp.Data.Labels); j++ {
 		label := resp.Data.Labels[j]
-		if label.Key == "node.kubernetes.io/instance.type" {
-			return label.Value, err
+		if label.Key == consts.LabelInstanceType {
+			list := strings.Split(label.Value, ".")
+			if len(list) < 2 {
+				return "", fmt.Errorf("invalid instance type label")
+			}
+			return list[1], nil
 		}
+	}
+	nodeList, err := i.clientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{
+		FieldSelector: fields.OneTermEqualSelector(consts.FieldProviderId, providerID).String(),
+	})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return "", err
+	}
+	if nodeList != nil && len(nodeList.Items) > 0 {
+		node = nodeList.Items[0]
+	}
+	if node.Name != "" && node.Labels[consts.LabelInstanceType] != "" {
+		instanceType := node.Labels[consts.LabelInstanceType]
+		list := strings.Split(instanceType, ".")
+		if len(list) < 2 {
+			return "", fmt.Errorf("invalid instance type label")
+		}
+		return list[1], nil
 	}
 	return "ecs", nil
 }
@@ -151,17 +193,19 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 	if err != nil && !apierrors.IsNotFound(err) {
 		return true, err
 	}
-	if !apierrors.IsNotFound(err) {
-		if _, ok := node.Labels[consts.LabelExternalNode]; ok {
-			klog.Info(fmt.Sprintf("节点 providerID:%s 有LabelExternalNode标签，保留节点", providerID))
-			return true, nil
+	if node != nil && node.Labels == nil && node.Labels[consts.LabelInstanceType] != "" {
+		instanceType := node.Labels[consts.LabelInstanceType]
+		list := strings.Split(instanceType, ".")
+		if len(list) < 2 {
+			return false, fmt.Errorf("invalid instance type label")
 		}
-		if time.Now().UTC().Sub(node.CreationTimestamp.Time.UTC()) < time.Minute*15 {
-			klog.Info(fmt.Sprintf("节点 providerID:%s 有创建时间小于15分钟，暂时保留节点", providerID))
+		switch list[1] {
+		case consts.InstanceTypeEcs, consts.InstanceTypeBms, consts.InstanceTypeExternal:
 			return true, nil
 		}
 		return false, nil
 	}
+
 	address, err := api.NodeCCMInit(consts.ClusterId, providerID, "")
 	if err != nil {
 		klog.Errorf("通过openapi查询节点%s失败,err:%v", providerID, err)
