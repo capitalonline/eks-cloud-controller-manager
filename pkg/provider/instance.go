@@ -193,7 +193,7 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 	if err != nil && !apierrors.IsNotFound(err) {
 		return true, err
 	}
-	if node != nil && node.Labels == nil && node.Labels[consts.LabelInstanceType] != "" {
+	if node != nil && node.Labels != nil && node.Labels[consts.LabelInstanceType] != "" {
 		instanceType := node.Labels[consts.LabelInstanceType]
 		list := strings.Split(instanceType, ".")
 		if len(list) < 2 {
