@@ -23,23 +23,24 @@ import (
 )
 
 const (
-	AnnotationLbProtocol   = "service.beta.kubernetes.io/cds-load-balancer-protocol"
-	AnnotationLbType       = "service.beta.kubernetes.io/cds-load-balancer-types"
-	AnnotationLbSpec       = "service.beta.kubernetes.io/cds-load-balancer-specification"
-	AnnotationLbBandwidth  = "service.beta.kubernetes.io/cds-load-balancer-bandwidth"
-	AnnotationLbEip        = "service.beta.kubernetes.io/cds-load-balancer-eip"
-	AnnotationLbAlgorithm  = "service.beta.kubernetes.io/cds-load-balancer-algorithm"
-	AnnotationLbSubjectId  = "service.beta.kubernetes.io/cds-load-balancer-subject-id"
-	AnnotationLbListen     = "service.eks.listen"
-	LbNetTypeWan           = "wan"
-	LbNetTypeWanLan        = "wan_lan"
-	LbBillingMethodCostPay = "0" // 按需计费
-	LabelNodeAz            = "node.kubernetes.io/node.az"
-	LabelNodeAzCode        = "node.kubernetes.io/node.az-code"
-	LbTaskSuccess          = "success"
-	LbTakError             = "error"
-	BillingType            = "number"
-	BandwidthShared        = "shared"
+	AnnotationLbProtocol      = "service.beta.kubernetes.io/cds-load-balancer-protocol"
+	AnnotationLbType          = "service.beta.kubernetes.io/cds-load-balancer-types"
+	AnnotationLbSpec          = "service.beta.kubernetes.io/cds-load-balancer-specification"
+	AnnotationLbBandwidth     = "service.beta.kubernetes.io/cds-load-balancer-bandwidth"
+	AnnotationLbEip           = "service.beta.kubernetes.io/cds-load-balancer-eip"
+	AnnotationLbAlgorithm     = "service.beta.kubernetes.io/cds-load-balancer-algorithm"
+	AnnotationLbSubjectId     = "service.beta.kubernetes.io/cds-load-balancer-subject-id"
+	AnnotationLbBillingMethod = "service.beta.kubernetes.io/cds-load-balancer-billingmethod"
+	AnnotationLbListen        = "service.eks.listen"
+	LbNetTypeWan              = "wan"
+	LbNetTypeWanLan           = "wan_lan"
+	LbBillingMethodCostPay    = "0" // 按需计费
+	LabelNodeAz               = "node.kubernetes.io/node.az"
+	LabelNodeAzCode           = "node.kubernetes.io/node.az-code"
+	LbTaskSuccess             = "success"
+	LbTakError                = "error"
+	DefaultBillingType        = "number"
+	BandwidthShared           = "shared"
 )
 
 const (
@@ -202,6 +203,11 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service, nodes
 	lbSpec := service.Annotations[AnnotationLbSpec]
 	//lbBandwidth := service.Annotations[AnnotationLbBandwidth]
 
+	billingMethod := service.Annotations[AnnotationLbBillingMethod]
+	if billingMethod == "" {
+		billingMethod = DefaultBillingType
+	}
+
 	lbBandwidth, err := strconv.ParseInt(service.Annotations[AnnotationLbBandwidth], 10, 64)
 	if err != nil {
 		return "", err
@@ -291,7 +297,7 @@ outer:
 		bandwidth := bandwidthResp.Data[i]
 		for j := 0; j < len(bandwidth.BillingScheme); j++ {
 			bill := bandwidth.BillingScheme[j]
-			if bill.BillingType == BillingType {
+			if bill.BillingType == billingMethod {
 				bandwidthBillingSchemeId = bill.BillingSchemeId
 				break outer
 			}
