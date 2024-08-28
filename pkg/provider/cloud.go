@@ -1,12 +1,17 @@
 package provider
 
 import (
+	"fmt"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
 	"io"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 	cloudprovider "k8s.io/cloud-provider"
 	"log"
+	"time"
 )
 
 var _ cloudprovider.Interface = (*Cloud)(nil)
@@ -41,6 +46,21 @@ func (cloud *Cloud) Instances() (cloudprovider.Instances, bool) {
 		log.Fatalf("newCloud:: Failed to create kubernetes config: %v", err)
 	}
 	clientSet, err := kubernetes.NewForConfig(config)
+
+	nodeInformerFactory := informers.NewSharedInformerFactory(clientSet, time.Second*10)
+	nodeInformer := nodeInformerFactory.Core().V1().Nodes().Informer()
+	if err = nodeInformer.AddIndexers(cache.Indexers{
+		"byField": func(obj interface{}) ([]string, error) {
+			node, ok := obj.(*v1.Node)
+			if !ok {
+				return nil, fmt.Errorf("object is not a node")
+			}
+			return []string{node.Spec.ProviderID}, nil
+		},
+	}); err != nil {
+		panic(fmt.Errorf("can not add indexer %s", err.Error()))
+	}
+	go nodeInformerFactory.Start(make(chan struct{}))
 	return &Instances{clientSet: clientSet}, true
 }
 
