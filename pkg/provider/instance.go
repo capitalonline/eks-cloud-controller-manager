@@ -70,11 +70,15 @@ func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 		})
 	}
 	if len(address) == 0 {
-		node, err := i.clientSet.CoreV1().Nodes().Get(ctx, providerID, metav1.GetOptions{})
-		if err != nil {
-			return nil, err
+		nodeList, err := i.clientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{
+			FieldSelector: fields.OneTermEqualSelector(consts.FieldProviderId, providerID).String(),
+		})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return nodeAddress, err
 		}
-		return node.Status.Addresses, nil
+		if nodeList != nil && len(nodeList.Items) != 0 {
+			nodeAddress = nodeList.Items[0].Status.Addresses
+		}
 	}
 	return nodeAddress, nil
 }
@@ -190,16 +194,22 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 	if len(providerID) == 0 {
 		return true, errors.New("providerID为空")
 	}
-	node, err := i.clientSet.CoreV1().Nodes().Get(ctx, providerID, metav1.GetOptions{})
+	nodeList, err := i.clientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{
+		FieldSelector: fields.OneTermEqualSelector(consts.FieldProviderId, providerID).String(),
+	})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return true, err
 	}
+	var node v1.Node
+	if nodeList != nil && len(nodeList.Items) != 0 {
+		node = nodeList.Items[0]
+	}
 	var bytes []byte = make([]byte, 0)
-	if node != nil {
+	if node.Name != "" {
 		bytes, _ = json.Marshal(node)
 	}
 	klog.Infof("node %s dont have instance-type label,node info:%s", providerID, string(bytes))
-	if node != nil && node.Labels != nil && node.Labels[consts.LabelInstanceType] != "" {
+	if node.Name != "" && node.Labels != nil && node.Labels[consts.LabelInstanceType] != "" {
 		instanceType := node.Labels[consts.LabelInstanceType]
 		list := strings.Split(instanceType, ".")
 		if len(list) < 2 {
