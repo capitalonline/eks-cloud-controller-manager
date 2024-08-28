@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/api"
@@ -203,9 +204,13 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 		case consts.InstanceTypeEcs, consts.InstanceTypeBms, consts.InstanceTypeExternal:
 			return true, nil
 		}
+		klog.Warningf("node %s label is invalid:%s", providerID, instanceType)
 		return false, nil
 	}
-
+	if node != nil {
+		bytes, _ := json.Marshal(node)
+		klog.Infof("node %s dont have instance-type label,node info:%s", providerID, string(bytes))
+	}
 	address, err := api.NodeCCMInit(consts.ClusterId, providerID, "")
 	if err != nil {
 		klog.Errorf("通过openapi查询节点%s失败,err:%v", providerID, err)
@@ -214,6 +219,7 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 	switch address.Data.Status {
 	// 需要删除
 	case consts.NodeStatusDeleted:
+		klog.Warningf("node %v is deleted by server", providerID)
 		return false, nil
 	default:
 	}
