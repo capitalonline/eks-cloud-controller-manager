@@ -194,6 +194,11 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 	if err != nil && !apierrors.IsNotFound(err) {
 		return true, err
 	}
+	var bytes []byte = make([]byte, 0)
+	if node != nil {
+		bytes, _ = json.Marshal(node)
+	}
+	klog.Infof("node %s dont have instance-type label,node info:%s", providerID, string(bytes))
 	if node != nil && node.Labels != nil && node.Labels[consts.LabelInstanceType] != "" {
 		instanceType := node.Labels[consts.LabelInstanceType]
 		list := strings.Split(instanceType, ".")
@@ -206,10 +211,6 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 		}
 		klog.Warningf("node %s label is invalid:%s", providerID, instanceType)
 		return false, nil
-	}
-	if node != nil {
-		bytes, _ := json.Marshal(node)
-		klog.Infof("node %s dont have instance-type label,node info:%s", providerID, string(bytes))
 	}
 	address, err := api.NodeCCMInit(consts.ClusterId, providerID, "")
 	if err != nil {
