@@ -47,10 +47,10 @@ func (cloud *Cloud) Instances() (cloudprovider.Instances, bool) {
 	}
 	clientSet, err := kubernetes.NewForConfig(config)
 
-	nodeInformerFactory := informers.NewSharedInformerFactory(clientSet, time.Second*10)
+	nodeInformerFactory := informers.NewSharedInformerFactory(clientSet, time.Second)
 	nodeInformer := nodeInformerFactory.Core().V1().Nodes().Informer()
 	if err = nodeInformer.AddIndexers(cache.Indexers{
-		"byField": func(obj interface{}) ([]string, error) {
+		"spec.providerID": func(obj interface{}) ([]string, error) {
 			node, ok := obj.(*v1.Node)
 			if !ok {
 				return nil, fmt.Errorf("object is not a node")
@@ -60,8 +60,10 @@ func (cloud *Cloud) Instances() (cloudprovider.Instances, bool) {
 	}); err != nil {
 		panic(fmt.Errorf("can not add indexer %s", err.Error()))
 	}
+	go nodeInformer.Run(make(chan struct{}))
 	go nodeInformerFactory.Start(make(chan struct{}))
-	return &Instances{clientSet: clientSet}, true
+	nodeInformerFactory.WaitForCacheSync(make(chan struct{}))
+	return &Instances{clientSet: clientSet, nodeIndexer: nodeInformer}, true
 }
 
 func (cloud *Cloud) InstancesV2() (cloudprovider.InstancesV2, bool) {

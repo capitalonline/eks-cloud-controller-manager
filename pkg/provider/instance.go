@@ -10,15 +10,17 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"strings"
+	"time"
 )
 
 type Instances struct {
-	clientSet *kubernetes.Clientset
+	clientSet   *kubernetes.Clientset
+	nodeIndexer cache.SharedIndexInformer
 }
 
 func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.NodeAddress, error) {
@@ -70,15 +72,11 @@ func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 		})
 	}
 	if len(address) == 0 {
-		nodeList, err := i.clientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{
-			FieldSelector: fields.OneTermEqualSelector(consts.FieldProviderId, providerID).String(),
-		})
-		if err != nil && !apierrors.IsNotFound(err) {
+		node, err := i.getNodeByByProviderID(providerID)
+		if err != nil {
 			return nodeAddress, err
 		}
-		if nodeList != nil && len(nodeList.Items) != 0 {
-			nodeAddress = nodeList.Items[0].Status.Addresses
-		}
+		nodeAddress = node.Status.Addresses
 	}
 	return nodeAddress, nil
 }
@@ -144,7 +142,7 @@ func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (stri
 
 func (i *Instances) InstanceTypeByProviderID(ctx context.Context, providerID string) (string, error) {
 	klog.Info(fmt.Sprintf("InstanceTypeByProviderID providerID:%v", providerID))
-	var node v1.Node
+	var node *v1.Node
 	resp, err := api.NodeCCMInit(consts.ClusterId, providerID, "")
 	if err != nil {
 		klog.Errorf("通过openapi查询节点%s失败,err:%v", providerID, err)
@@ -160,16 +158,11 @@ func (i *Instances) InstanceTypeByProviderID(ctx context.Context, providerID str
 			return list[1], nil
 		}
 	}
-	nodeList, err := i.clientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{
-		FieldSelector: fields.OneTermEqualSelector(consts.FieldProviderId, providerID).String(),
-	})
-	if err != nil && !apierrors.IsNotFound(err) {
+	node, err = i.getNodeByByProviderID(providerID)
+	if err != nil {
 		return "", err
 	}
-	if nodeList != nil && len(nodeList.Items) > 0 {
-		node = nodeList.Items[0]
-	}
-	if node.Name != "" && node.Labels[consts.LabelInstanceType] != "" {
+	if node != nil && node.Labels[consts.LabelInstanceType] != "" {
 		instanceType := node.Labels[consts.LabelInstanceType]
 		list := strings.Split(instanceType, ".")
 		if len(list) < 2 {
@@ -194,15 +187,9 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 	if len(providerID) == 0 {
 		return true, errors.New("providerID为空")
 	}
-	nodeList, err := i.clientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{
-		FieldSelector: fields.OneTermEqualSelector(consts.FieldProviderId, providerID).String(),
-	})
-	if err != nil && !apierrors.IsNotFound(err) {
-		return true, err
-	}
-	var node v1.Node
-	if nodeList != nil && len(nodeList.Items) != 0 {
-		node = nodeList.Items[0]
+	node, err := i.getNodeByByProviderID(providerID)
+	if err != nil {
+		return false, err
 	}
 	var bytes []byte = make([]byte, 0)
 	if node.Name != "" {
@@ -239,4 +226,21 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 
 func (i *Instances) InstanceShutdownByProviderID(ctx context.Context, providerID string) (bool, error) {
 	return false, errors.New("not implemented")
+}
+
+func (i *Instances) getNodeByByProviderID(providerID string) (*v1.Node, error) {
+	time.Sleep(time.Second * 2)
+	var node *v1.Node
+	nodes, err := i.nodeIndexer.GetIndexer().ByIndex("spec.providerID", providerID)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return node, err
+	}
+	if len(nodes) < 1 {
+		return node, errors.New("can't find node by providerID")
+	}
+	node, ok := nodes[0].(*v1.Node)
+	if !ok {
+		return node, fmt.Errorf("nodes[0] is not a node, %v", node)
+	}
+	return node, nil
 }
