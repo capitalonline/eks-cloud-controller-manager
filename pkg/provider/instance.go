@@ -11,16 +11,12 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"strings"
 	"time"
 )
 
 type Instances struct {
-	clientSet   *kubernetes.Clientset
-	nodeIndexer cache.SharedIndexInformer
 }
 
 func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.NodeAddress, error) {
@@ -31,7 +27,7 @@ func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v
 		return nil, nil
 	}
 	if len(address) == 0 {
-		node, err := i.clientSet.CoreV1().Nodes().Get(ctx, string(name), metav1.GetOptions{})
+		node, err := client.clientSet.CoreV1().Nodes().Get(ctx, string(name), metav1.GetOptions{})
 		if err != nil {
 			return nil, err
 		}
@@ -93,7 +89,7 @@ func (i *Instances) InstanceID(ctx context.Context, nodeName types.NodeName) (st
 		return resp.Data.NodeId, nil
 	}
 	// NodeId 为空可能是因为节点的状态改变，直接返回providerId
-	node, err := i.clientSet.CoreV1().Nodes().Get(ctx, string(nodeName), metav1.GetOptions{})
+	node, err := client.clientSet.CoreV1().Nodes().Get(ctx, string(nodeName), metav1.GetOptions{})
 	if err != nil {
 		klog.Errorf("查询节点%s失败,err:%v", nodeName, err)
 		return "", err
@@ -125,7 +121,7 @@ func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (stri
 			return list[1], nil
 		}
 	}
-	node, err := i.clientSet.CoreV1().Nodes().Get(ctx, string(name), metav1.GetOptions{})
+	node, err := client.clientSet.CoreV1().Nodes().Get(ctx, string(name), metav1.GetOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return "", err
 	}
@@ -231,7 +227,7 @@ func (i *Instances) InstanceShutdownByProviderID(ctx context.Context, providerID
 func (i *Instances) getNodeByByProviderID(providerID string) (*v1.Node, error) {
 	time.Sleep(time.Second * 2)
 	var node *v1.Node
-	nodes, err := i.nodeIndexer.GetIndexer().ByIndex("spec.providerID", providerID)
+	nodes, err := client.informer.GetIndexer().ByIndex("spec.providerID", providerID)
 	if err != nil && !apierrors.IsNotFound(err) {
 		return node, err
 	}

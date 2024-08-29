@@ -16,10 +16,47 @@ import (
 
 var _ cloudprovider.Interface = (*Cloud)(nil)
 
+var client *Client
+
 func init() {
+	client = initClient()
 	cloudprovider.RegisterCloudProvider(consts.ProviderName, func(config io.Reader) (cloudprovider.Interface, error) {
 		return &Cloud{}, nil
 	})
+}
+
+type Client struct {
+	clientSet *kubernetes.Clientset
+	informer  cache.SharedIndexInformer
+}
+
+func initClient() *Client {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		panic(fmt.Errorf("newCloud:: Failed to create kubernetes config: %v", err))
+	}
+	clientSet, err := kubernetes.NewForConfig(config)
+
+	nodeInformerFactory := informers.NewSharedInformerFactory(clientSet, time.Second)
+	nodeInformer := nodeInformerFactory.Core().V1().Nodes().Informer()
+	if err = nodeInformer.AddIndexers(cache.Indexers{
+		"spec.providerID": func(obj interface{}) ([]string, error) {
+			node, ok := obj.(*v1.Node)
+			if !ok {
+				return nil, fmt.Errorf("object is not a node")
+			}
+			return []string{node.Spec.ProviderID}, nil
+		},
+	}); err != nil {
+		panic(fmt.Errorf("can not add indexer %s", err.Error()))
+	}
+	go nodeInformer.Run(make(chan struct{}))
+	go nodeInformerFactory.Start(make(chan struct{}))
+	nodeInformerFactory.WaitForCacheSync(make(chan struct{}))
+	return &Client{
+		clientSet: clientSet,
+		informer:  nodeInformer,
+	}
 }
 
 type Cloud struct {
@@ -41,29 +78,7 @@ func (cloud *Cloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 }
 
 func (cloud *Cloud) Instances() (cloudprovider.Instances, bool) {
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		log.Fatalf("newCloud:: Failed to create kubernetes config: %v", err)
-	}
-	clientSet, err := kubernetes.NewForConfig(config)
-
-	nodeInformerFactory := informers.NewSharedInformerFactory(clientSet, time.Second)
-	nodeInformer := nodeInformerFactory.Core().V1().Nodes().Informer()
-	if err = nodeInformer.AddIndexers(cache.Indexers{
-		"spec.providerID": func(obj interface{}) ([]string, error) {
-			node, ok := obj.(*v1.Node)
-			if !ok {
-				return nil, fmt.Errorf("object is not a node")
-			}
-			return []string{node.Spec.ProviderID}, nil
-		},
-	}); err != nil {
-		panic(fmt.Errorf("can not add indexer %s", err.Error()))
-	}
-	go nodeInformer.Run(make(chan struct{}))
-	go nodeInformerFactory.Start(make(chan struct{}))
-	nodeInformerFactory.WaitForCacheSync(make(chan struct{}))
-	return &Instances{clientSet: clientSet, nodeIndexer: nodeInformer}, true
+	return &Instances{}, true
 }
 
 func (cloud *Cloud) InstancesV2() (cloudprovider.InstancesV2, bool) {
