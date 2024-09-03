@@ -165,7 +165,7 @@ func (n *NodeController) Run(ctx context.Context) error {
 
 func (n *NodeController) ListenNodes(ctx context.Context) {
 
-	factory := informers.NewSharedInformerFactory(n.clientSet, 0)
+	factory := informers.NewSharedInformerFactory(n.clientSet, time.Second)
 	informer := factory.Core().V1().Events().Informer()
 	stopCh := make(chan struct{})
 	factory.Core().V1().Events().Lister()
