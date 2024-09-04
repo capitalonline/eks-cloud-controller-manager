@@ -181,7 +181,6 @@ func (n *NodeController) ListenNodes(ctx context.Context) {
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			event, _ := newObj.(*v1.Event)
-			klog.Infof("update event %s ", event.Reason)
 			switch event.Reason {
 			case consts.EventNodeNotReady:
 				n.NotifyNodeDown(ctx, event)
@@ -189,10 +188,10 @@ func (n *NodeController) ListenNodes(ctx context.Context) {
 				n.NotifyNodeReady(ctx, event)
 			}
 		},
-		DeleteFunc: func(obj interface{}) {
-			event, _ := obj.(*v1.Event)
-			klog.Errorf("delete event %s", event.Reason)
-		},
+		//DeleteFunc: func(obj interface{}) {
+		//	event, _ := obj.(*v1.Event)
+		//	klog.Errorf("delete event %s", event.Reason)
+		//},
 	},
 	)
 

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/utils/errors"
@@ -87,6 +86,6 @@ func ParseFromHttpResponse(hr *http.Response, response Response, r Request) (err
 		return errors.NewCdsSDKError(fmt.Sprintf("ClientError.ParseJsonError Action:%s msg:", r.GetAction()), msg, "")
 	}
 
-	log.Printf("action：%s  request body: %s response body: %s", r.GetAction(), string(reqParams), string(body))
+	//log.Printf("action：%s  request body: %s response body: %s", r.GetAction(), string(reqParams), string(body))
 	return
 }

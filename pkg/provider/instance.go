@@ -101,7 +101,7 @@ func (i *Instances) InstanceID(ctx context.Context, nodeName types.NodeName) (st
 }
 
 func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (string, error) {
-	klog.Info(fmt.Sprintf("InstanceID name:%v", name))
+	klog.Info(fmt.Sprintf("InstanceType name:%v", name))
 
 	resp, err := api.NodeCCMInit(consts.ClusterId, "", string(name))
 	if err != nil {
@@ -188,7 +188,6 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 	if node.Name != "" {
 		bytes, _ = json.Marshal(node)
 	}
-	klog.Infof("node %s dont have instance-type label,node info:%s", providerID, string(bytes))
 	if node.Name != "" && node.Labels != nil && node.Labels[consts.LabelInstanceType] != "" {
 		instanceType := node.Labels[consts.LabelInstanceType]
 		list := strings.Split(instanceType, ".")
@@ -202,6 +201,7 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 		klog.Warningf("node %s label is invalid:%s", providerID, instanceType)
 		return false, nil
 	}
+	klog.Infof("node %s dont have instance-type label,node info:%s", providerID, string(bytes))
 	address, err := api.NodeCCMInit(consts.ClusterId, providerID, "")
 	if err != nil {
 		klog.Errorf("通过openapi查询节点%s失败,err:%v", providerID, err)
