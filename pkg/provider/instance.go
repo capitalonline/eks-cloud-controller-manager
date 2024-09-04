@@ -110,9 +110,6 @@ func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (stri
 	}
 	for j := 0; j < len(resp.Data.Labels); j++ {
 		label := resp.Data.Labels[j]
-		//if label.Key == "node.kubernetes.io/instance.type" {
-		//	return label.Value, err
-		//}
 		if label.Key == consts.LabelInstanceType {
 			list := strings.Split(label.Value, ".")
 			if len(list) < 2 {
@@ -133,7 +130,7 @@ func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (stri
 		}
 		return list[1], nil
 	}
-	return "ecs", nil
+	return "external", nil
 }
 
 func (i *Instances) InstanceTypeByProviderID(ctx context.Context, providerID string) (string, error) {
