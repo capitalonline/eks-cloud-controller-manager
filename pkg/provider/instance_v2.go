@@ -26,12 +26,16 @@ func (i *InstancesV2) InstanceExists(ctx context.Context, node *v1.Node) (bool, 
 		return true, err
 	}
 	if nodeInfo != nil && nodeInfo.Labels != nil && node.Labels[consts.LabelInstanceType] != "" {
-		instanceType := node.Labels[consts.LabelInstanceType]
-		list := strings.Split(instanceType, ".")
-		if len(list) < 2 {
+		instanceTypeValue := node.Labels[consts.LabelInstanceType]
+		list := strings.Split(instanceTypeValue, ".")
+		if len(list) < 2 && instanceTypeValue != consts.InstanceTypeExternal {
 			return false, fmt.Errorf("invalid instance type label")
 		}
-		switch list[1] {
+		instanceType := instanceTypeValue
+		if len(list) > 2 {
+			instanceType = list[1]
+		}
+		switch instanceType {
 		case consts.InstanceTypeEcs, consts.InstanceTypeBms, consts.InstanceTypeExternal:
 			return true, nil
 		}

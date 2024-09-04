@@ -115,7 +115,7 @@ func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (stri
 			if len(list) < 2 {
 				return "", fmt.Errorf("invalid instance type label")
 			}
-			return list[1], nil
+			return label.Value, nil
 		}
 	}
 	node, err := client.clientSet.CoreV1().Nodes().Get(ctx, string(name), metav1.GetOptions{})
@@ -128,7 +128,7 @@ func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (stri
 		if len(list) < 2 {
 			return "", fmt.Errorf("invalid instance type label")
 		}
-		return list[1], nil
+		return instanceType, nil
 	}
 	return "external", nil
 }
@@ -148,7 +148,7 @@ func (i *Instances) InstanceTypeByProviderID(ctx context.Context, providerID str
 			if len(list) < 2 {
 				return "", fmt.Errorf("invalid instance type label")
 			}
-			return list[1], nil
+			return label.Value, nil
 		}
 	}
 	node, err = i.getNodeByByProviderID(providerID)
@@ -161,9 +161,9 @@ func (i *Instances) InstanceTypeByProviderID(ctx context.Context, providerID str
 		if len(list) < 2 {
 			return "", fmt.Errorf("invalid instance type label")
 		}
-		return list[1], nil
+		return instanceType, nil
 	}
-	return "ecs", nil
+	return "external", nil
 }
 
 func (i *Instances) AddSSHKeyToAllInstances(ctx context.Context, user string, keyData []byte) error {
@@ -189,12 +189,16 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 		bytes, _ = json.Marshal(node)
 	}
 	if node.Name != "" && node.Labels != nil && node.Labels[consts.LabelInstanceType] != "" {
-		instanceType := node.Labels[consts.LabelInstanceType]
-		list := strings.Split(instanceType, ".")
-		if len(list) < 2 {
+		instanceTypeValue := node.Labels[consts.LabelInstanceType]
+		list := strings.Split(instanceTypeValue, ".")
+		if len(list) < 2 && instanceTypeValue != consts.InstanceTypeExternal {
 			return false, fmt.Errorf("invalid instance type label")
 		}
-		switch list[1] {
+		instanceType := instanceTypeValue
+		if len(list) > 2 {
+			instanceType = list[1]
+		}
+		switch instanceType {
 		case consts.InstanceTypeEcs, consts.InstanceTypeBms, consts.InstanceTypeExternal:
 			return true, nil
 		}
