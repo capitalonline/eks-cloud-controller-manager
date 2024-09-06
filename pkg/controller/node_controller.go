@@ -20,6 +20,7 @@ import (
 	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	metrics "k8s.io/metrics/pkg/client/clientset/versioned"
 	"log"
+	"reflect"
 	"strings"
 	"time"
 )
@@ -50,11 +51,11 @@ func NewNodeController() NodeController {
 
 // CollectPlayLoad 获取集群节点的负载信息
 func (n *NodeController) CollectPlayLoad(ctx context.Context) error {
-	metricList, err := n.metricsClient.MetricsV1beta1().NodeMetricses().List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		klog.Info("获取指标列表失败，err:", err)
-		return err
-	}
+	//metricList, err := n.metricsClient.MetricsV1beta1().NodeMetricses().List(context.Background(), metav1.ListOptions{})
+	//if err != nil {
+	//	klog.Info("获取指标列表失败，err:", err)
+	//	return err
+	//}
 	// 查询所有节点信息，获取余量信息
 	nodeList, err := n.clientSet.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
@@ -68,26 +69,53 @@ func (n *NodeController) CollectPlayLoad(ctx context.Context) error {
 	var request = commoneks.NewModifyClusterLoadRequest()
 	request.ClusterId = consts.ClusterId
 	request.NodeList = make([]commoneks.ModifyClusterLoadReqNode, 0)
-	for _, metric := range metricList.Items {
-		node := nodeSet[metric.Name]
-		load, err := n.CalculateLoad(metric, node)
-		if err != nil {
-			continue
+	//for _, metric := range metricList.Items {
+	//	node := nodeSet[metric.Name]
+	//	load, err := n.CalculateLoad(metric, node)
+	//	if err != nil {
+	//		continue
+	//	}
+	//	request.NodeList = append(request.NodeList, commoneks.ModifyClusterLoadReqNode{
+	//		NodeId:   node.Spec.ProviderID,
+	//		NodeName: node.Name,
+	//		//Cpu: &commoneks.ResourceInfo{
+	//		//	Usage:    load.Cpu.Usage,
+	//		//	Limits:   load.Cpu.Limits,
+	//		//	Requests: load.Cpu.Requests,
+	//		//},
+	//		//Memory: &commoneks.ResourceInfo{
+	//		//	Usage:    load.Mem.Usage,
+	//		//	Limits:   load.Mem.Limits,
+	//		//	Requests: load.Mem.Requests,
+	//		//},
+	//		Status: load.Status,
+	//	})
+	//}
+	for _, node := range nodeList.Items {
+		//node := nodeSet[metric.Name]
+		//load, err := n.CalculateLoad(metric, node)
+		//if err != nil {
+		//	continue
+		//}
+		status := consts.NodeStatusNotReady
+		if NodeReady(node) {
+			status = consts.NodeStatusReady
 		}
+
 		request.NodeList = append(request.NodeList, commoneks.ModifyClusterLoadReqNode{
 			NodeId:   node.Spec.ProviderID,
 			NodeName: node.Name,
-			Cpu: &commoneks.ResourceInfo{
-				Usage:    load.Cpu.Usage,
-				Limits:   load.Cpu.Limits,
-				Requests: load.Cpu.Requests,
-			},
-			Memory: &commoneks.ResourceInfo{
-				Usage:    load.Mem.Usage,
-				Limits:   load.Mem.Limits,
-				Requests: load.Mem.Requests,
-			},
-			Status: load.Status,
+			//Cpu: &commoneks.ResourceInfo{
+			//	Usage:    load.Cpu.Usage,
+			//	Limits:   load.Cpu.Limits,
+			//	Requests: load.Cpu.Requests,
+			//},
+			//Memory: &commoneks.ResourceInfo{
+			//	Usage:    load.Mem.Usage,
+			//	Limits:   load.Mem.Limits,
+			//	Requests: load.Mem.Requests,
+			//},
+			Status: status,
 		})
 	}
 	_, err = api.ModifyClusterLoad(request)
@@ -417,16 +445,30 @@ func (n *NodeController) Update(ctx context.Context) error {
 				klog.Errorf("unable to delete node %q: %v", node.Name, err)
 			}
 		case consts.NodeStatusRunning:
-			flag, err := UpdateNode(&node, details.Data)
-			if err != nil {
-				return err
+			oldNode := node.DeepCopy()
+			if err := UpdateNode(&node, details.Data); err != nil {
+				return fmt.Errorf("update node %s failed with error %v", node.Name, err)
 			}
-			if flag {
+
+			//flag, err := UpdateNode(&node, details.Data)
+			//if err != nil {
+			//	return err
+			//}
+			if !reflect.DeepEqual(node.Labels, oldNode.Labels) ||
+				!reflect.DeepEqual(node.Spec.Taints, oldNode.Spec.Taints) ||
+				!reflect.DeepEqual(node.Annotations, oldNode.Annotations) {
 				_, err = n.clientSet.CoreV1().Nodes().Update(context.Background(), &node, metav1.UpdateOptions{})
 				if err != nil {
 					klog.Errorf("更新节点失败，err:%v", err)
 				}
 			}
+
+			//if flag {
+			//	_, err = n.clientSet.CoreV1().Nodes().Update(context.Background(), &node, metav1.UpdateOptions{})
+			//	if err != nil {
+			//		klog.Errorf("更新节点失败，err:%v", err)
+			//	}
+			//}
 		default:
 		}
 	}
@@ -434,43 +476,46 @@ func (n *NodeController) Update(ctx context.Context) error {
 }
 
 // UpdateNode 设置节点的污点
-func UpdateNode(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) (bool, error) {
+func UpdateNode(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) error {
 	if detail == nil || node == nil {
-		return false, errors.New("invalid node")
+		return errors.New("invalid node")
 	}
-	labelFlag := UpdateNodeLabels(node, detail)
-	taintFlag := UpdateNodeTaints(node, detail)
-	annotationFlag := UpdateNodeAnnotations(node, detail)
-	return labelFlag || taintFlag || annotationFlag, nil
+	//labelFlag := UpdateNodeLabels(node, detail)
+	//taintFlag := UpdateNodeTaints(node, detail)
+	//annotationFlag := UpdateNodeAnnotations(node, detail)
+	UpdateNodeLabels(node, detail)
+	UpdateNodeTaints(node, detail)
+	UpdateNodeAnnotations(node, detail)
+	return nil
 }
 
 // UpdateNodeLabels 更新节点标签
-func UpdateNodeLabels(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) bool {
+func UpdateNodeLabels(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) {
 	if len(detail.Labels) == 0 {
-		return false
+		return
 	}
-	labels := make(map[string]string)
-	if len(node.Labels) > 0 {
-		for key, value := range node.Labels {
-			labels[key] = value
-		}
+	if node.Labels == nil {
+		node.Labels = make(map[string]string)
 	}
 	for i := 0; i < len(detail.Labels); i++ {
 		label := detail.Labels[i]
-		labels[label.Key] = label.Value
+		node.Labels[label.Key] = label.Value
 	}
-	node.Labels = labels
-	return true
 }
 
 // UpdateNodeTaints 修改节点的污点
-func UpdateNodeTaints(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) bool {
+func UpdateNodeTaints(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) {
 
 	taints := make([]v1.Taint, 0, 0)
 	taintMap := make(map[string]v1.Taint)
 	if len(detail.Taints) == 0 {
-		return false
+		return
 	}
+	if len(node.Spec.Taints) == 0 {
+		node.Spec.Taints = taints
+		return
+	}
+
 	for i := 0; i < len(node.Spec.Taints); i++ {
 		taint := node.Spec.Taints[i]
 		taintMap[taint.Key] = v1.Taint{
@@ -491,26 +536,20 @@ func UpdateNodeTaints(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) 
 		taints = append(taints, value)
 	}
 	node.Spec.Taints = taints
-	return true
 }
 
 // UpdateNodeAnnotations 修改节点的污点
-func UpdateNodeAnnotations(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) bool {
+func UpdateNodeAnnotations(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) {
 	annotations := make(map[string]string)
 	if len(detail.Annotations) == 0 {
-		return false
-	}
-	for i := 0; i < len(detail.Annotations); i++ {
-		annotation := detail.Annotations[i]
-		annotations[annotation.Key] = annotation.Value
+		return
 	}
 	if len(node.Annotations) == 0 {
 		node.Annotations = annotations
-		return true
+		return
 	}
-	for k, v := range node.Annotations {
-		annotations[k] = v
+	for i := 0; i < len(detail.Annotations); i++ {
+		annotation := detail.Annotations[i]
+		node.Annotations[annotation.Key] = annotation.Value
 	}
-	node.Annotations = annotations
-	return true
 }
