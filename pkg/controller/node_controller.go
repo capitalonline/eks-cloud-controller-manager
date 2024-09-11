@@ -234,7 +234,6 @@ func (n *NodeController) ListenNodes(ctx context.Context) {
 }
 
 func (n *NodeController) NotifyNodeReady(ctx context.Context, event *v1.Event) {
-	klog.Info("notify node ready")
 	if event.InvolvedObject.Kind != consts.ResourceKindNode || event.Namespace != v1.NamespaceDefault {
 		return
 	}
@@ -265,9 +264,8 @@ func (n *NodeController) NotifyNodeReady(ctx context.Context, event *v1.Event) {
 }
 
 func (n *NodeController) NotifyNodeDown(ctx context.Context, event *v1.Event) {
-	klog.Info("notify down")
 	if event.Source.Component != "node-controller" || event.Namespace != v1.NamespaceDefault {
-		klog.Errorf("event source is not node-controller")
+		//klog.Errorf("event source is not node-controller")
 		return
 	}
 	node, err := n.clientSet.CoreV1().Nodes().Get(ctx, event.InvolvedObject.Name, metav1.GetOptions{})
@@ -312,7 +310,6 @@ func (n *NodeController) NotifyNodeDown(ctx context.Context, event *v1.Event) {
 		klog.Errorf("report node %s status failed,err:%v", node.Name, err)
 		return
 	}
-	klog.Info("report status success")
 	request := commoneks.NewSendAlarmRequest()
 	request.Theme = consts.K8sMetricAlarmTheme
 	request.NodeId = node.Spec.ProviderID
@@ -323,7 +320,6 @@ func (n *NodeController) NotifyNodeDown(ctx context.Context, event *v1.Event) {
 	request.Tags = []interface{}{}
 	request.Keyword = node.Name
 	request.Value = ip
-	klog.Errorf("节点%s宕机", node.Name)
 	resp, err := api.NotifyMasterDown(request)
 	if err != nil || resp == nil || resp.Code != consts.EksRequestSuccess {
 		klog.Error(fmt.Sprintf("send alarm error：%v, resp:%v", err, resp))
@@ -441,9 +437,10 @@ func (n *NodeController) Update(ctx context.Context) error {
 		switch details.Data.Status {
 		case consts.NodeStatusDeleted:
 			//需要ccm主动触发删除该节点
-			if err := n.clientSet.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{}); err != nil {
-				klog.Errorf("unable to delete node %q: %v", node.Name, err)
-			}
+			//if err := n.clientSet.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{}); err != nil {
+			//	klog.Errorf("unable to delete node %q: %v", node.Name, err)
+			//}
+			klog.Warningf("node %q (providerId:%s) deleted from eks-server,but exists in kubernetes", node.Name, node.Spec.ProviderID)
 		case consts.NodeStatusRunning:
 			oldNode := node.DeepCopy()
 			if err := UpdateNode(&node, details.Data); err != nil {

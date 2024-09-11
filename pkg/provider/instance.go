@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/api"
@@ -94,10 +93,11 @@ func (i *Instances) InstanceID(ctx context.Context, nodeName types.NodeName) (st
 		klog.Errorf("查询节点%s失败,err:%v", nodeName, err)
 		return "", err
 	}
-	if node != nil {
+	if node != nil && node.Spec.ProviderID != "" {
 		return node.Spec.ProviderID, nil
 	}
-	return "", nil
+	klog.Warningf("could not find instanceId for node %s ,should been deleted,but exists in kubernetes", nodeName)
+	return "", fmt.Errorf("could not find instanceId for node %s", nodeName)
 }
 
 func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (string, error) {
@@ -111,10 +111,6 @@ func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (stri
 	for j := 0; j < len(resp.Data.Labels); j++ {
 		label := resp.Data.Labels[j]
 		if label.Key == consts.LabelInstanceType {
-			list := strings.Split(label.Value, ".")
-			if len(list) < 2 {
-				return "", fmt.Errorf("invalid instance type label")
-			}
 			return label.Value, nil
 		}
 	}
@@ -124,10 +120,6 @@ func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (stri
 	}
 	if node != nil && node.Labels != nil && node.Labels[consts.LabelInstanceType] != "" {
 		instanceType := node.Labels[consts.LabelInstanceType]
-		list := strings.Split(instanceType, ".")
-		if len(list) < 2 {
-			return "", fmt.Errorf("invalid instance type label")
-		}
 		return instanceType, nil
 	}
 	return "external", nil
@@ -144,10 +136,6 @@ func (i *Instances) InstanceTypeByProviderID(ctx context.Context, providerID str
 	for j := 0; j < len(resp.Data.Labels); j++ {
 		label := resp.Data.Labels[j]
 		if label.Key == consts.LabelInstanceType {
-			list := strings.Split(label.Value, ".")
-			if len(list) < 2 {
-				return "", fmt.Errorf("invalid instance type label")
-			}
 			return label.Value, nil
 		}
 	}
@@ -157,10 +145,6 @@ func (i *Instances) InstanceTypeByProviderID(ctx context.Context, providerID str
 	}
 	if node != nil && node.Labels[consts.LabelInstanceType] != "" {
 		instanceType := node.Labels[consts.LabelInstanceType]
-		list := strings.Split(instanceType, ".")
-		if len(list) < 2 {
-			return "", fmt.Errorf("invalid instance type label")
-		}
 		return instanceType, nil
 	}
 	return "external", nil
@@ -184,16 +168,9 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 	if err != nil {
 		return false, err
 	}
-	var bytes []byte = make([]byte, 0)
-	if node.Name != "" {
-		bytes, _ = json.Marshal(node)
-	}
 	if node.Name != "" && node.Labels != nil && node.Labels[consts.LabelInstanceType] != "" {
 		instanceTypeValue := node.Labels[consts.LabelInstanceType]
 		list := strings.Split(instanceTypeValue, ".")
-		if len(list) < 2 && instanceTypeValue != consts.InstanceTypeExternal {
-			return false, fmt.Errorf("invalid instance type label")
-		}
 		instanceType := instanceTypeValue
 		if len(list) > 2 {
 			instanceType = list[1]
@@ -202,10 +179,9 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 		case consts.InstanceTypeEcs, consts.InstanceTypeBms, consts.InstanceTypeExternal:
 			return true, nil
 		}
-		klog.Warningf("node %s label is invalid:%s", providerID, instanceType)
-		return false, nil
+		klog.Warningf("node %s (providerId:%s) with invalid label: %=%,should been deleted,but exists in kubernetes", node.Name, providerID, consts.LabelInstanceType, instanceTypeValue)
+		return true, nil
 	}
-	klog.Infof("node %s dont have instance-type label,node info:%s", providerID, string(bytes))
 	address, err := api.NodeCCMInit(consts.ClusterId, providerID, "")
 	if err != nil {
 		klog.Errorf("通过openapi查询节点%s失败,err:%v", providerID, err)
@@ -214,8 +190,9 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 	switch address.Data.Status {
 	// 需要删除
 	case consts.NodeStatusDeleted:
-		klog.Warningf("node %v is deleted by server", providerID)
-		return false, nil
+		//klog.Warningf("node %v is deleted by server", providerID)
+		klog.Warningf("node %q (providerId:%s) deleted from eks-server,but exists in kubernetes", node.Name, providerID)
+		return true, nil
 	default:
 	}
 	return true, nil

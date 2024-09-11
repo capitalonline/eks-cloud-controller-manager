@@ -25,12 +25,9 @@ func (i *InstancesV2) InstanceExists(ctx context.Context, node *v1.Node) (bool, 
 	if err != nil && !apierrors.IsNotFound(err) {
 		return true, err
 	}
-	if nodeInfo != nil && nodeInfo.Labels != nil && node.Labels[consts.LabelInstanceType] != "" {
-		instanceTypeValue := node.Labels[consts.LabelInstanceType]
+	if nodeInfo != nil && nodeInfo.Labels != nil && nodeInfo.Labels[consts.LabelInstanceType] != "" {
+		instanceTypeValue := nodeInfo.Labels[consts.LabelInstanceType]
 		list := strings.Split(instanceTypeValue, ".")
-		if len(list) < 2 && instanceTypeValue != consts.InstanceTypeExternal {
-			return false, fmt.Errorf("invalid instance type label")
-		}
 		instanceType := instanceTypeValue
 		if len(list) > 2 {
 			instanceType = list[1]
@@ -39,14 +36,16 @@ func (i *InstancesV2) InstanceExists(ctx context.Context, node *v1.Node) (bool, 
 		case consts.InstanceTypeEcs, consts.InstanceTypeBms, consts.InstanceTypeExternal:
 			return true, nil
 		}
-		return false, nil
+		klog.Warningf("node %s (providerId:%s) with invalid label: %=%,should been deleted,but exists in kubernetes", node.Name, node.Spec.ProviderID, consts.LabelInstanceType, instanceTypeValue)
+		return true, nil
 	}
 	resp, err := api.NodeCCMInit(consts.ClusterId, node.Spec.ProviderID, "")
 	if err != nil {
-		return false, nil
+		return false, err
 	}
 	if resp.Data.PrivateIp == "" {
-		return false, nil
+		klog.Warningf("can not find providerId for node %s,should been deleted,but exists in kubernetes", node.Name)
+		return true, nil
 	}
 	return true, nil
 }
