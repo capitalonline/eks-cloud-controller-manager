@@ -269,7 +269,9 @@ func (n *NodeController) NotifyNodeDown(ctx context.Context, event *v1.Event) {
 		return
 	}
 	node, err := n.clientSet.CoreV1().Nodes().Get(ctx, event.InvolvedObject.Name, metav1.GetOptions{})
-	if _, ok := node.Labels[consts.NodeRoleMaster]; !ok {
+	_, controlPlaneOk := node.Labels[consts.NodeRoleControlPlane]
+	_, masterOk := node.Labels[consts.NodeRoleMaster]
+	if !controlPlaneOk && !masterOk {
 		return
 	}
 	if err != nil || node == nil || NodeHealth(*node) {

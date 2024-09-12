@@ -65,6 +65,7 @@ const (
 )
 
 const NodeRoleMaster = "node-role.kubernetes.io/master"
+const NodeRoleControlPlane = "node-role.kubernetes.io/control-plane"
 
 const (
 	AlarmMetricMasterDown = "eks.node.master_down"
