@@ -34,7 +34,7 @@ func (i *InstancesV2) InstanceExists(ctx context.Context, node *v1.Node) (bool, 
 		case consts.InstanceTypeEcs, consts.InstanceTypeBms, consts.InstanceTypeExternal:
 			return true, nil
 		}
-		klog.Warningf("node %s (providerId:%s) with invalid label: %=%,should been deleted,but exists in kubernetes", node.Name, node.Spec.ProviderID, consts.LabelInstanceType, instanceTypeValue)
+		klog.Warningf("node %s (providerId:%s) with invalid label: %s=%s,should been deleted,but exists in kubernetes", node.Name, node.Spec.ProviderID, consts.LabelInstanceType, instanceTypeValue)
 		return true, nil
 	}
 	resp, err := api.NodeCCMInit(consts.ClusterId, node.Spec.ProviderID, "")
