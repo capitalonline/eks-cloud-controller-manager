@@ -82,12 +82,7 @@ func (cloud *Cloud) Instances() (cloudprovider.Instances, bool) {
 }
 
 func (cloud *Cloud) InstancesV2() (cloudprovider.InstancesV2, bool) {
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		log.Fatalf("newCloud:: Failed to create kubernetes config: %v", err)
-	}
-	clientSet, err := kubernetes.NewForConfig(config)
-	return &InstancesV2{clientSet: clientSet}, false
+	return &InstancesV2{}, false
 }
 
 func (cloud *Cloud) Zones() (cloudprovider.Zones, bool) {
