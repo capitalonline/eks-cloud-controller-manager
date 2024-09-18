@@ -65,6 +65,7 @@ const (
 )
 
 const NodeRoleMaster = "node-role.kubernetes.io/master"
+const NodeRoleControlPlane = "node-role.kubernetes.io/control-plane"
 
 const (
 	AlarmMetricMasterDown = "eks.node.master_down"
@@ -88,4 +89,18 @@ const (
 
 const (
 	NameSpaceKubeSystem = "kube-system"
+)
+
+const (
+	LabelInstanceType = "node.kubernetes.io/instance-type"
+)
+
+const (
+	InstanceTypeEcs      = "ecs"
+	InstanceTypeBms      = "bms"
+	InstanceTypeExternal = "external"
+)
+
+const (
+	FieldProviderId = "spec.providerID"
 )
