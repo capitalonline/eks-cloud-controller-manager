@@ -179,7 +179,7 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 		case consts.InstanceTypeEcs, consts.InstanceTypeBms, consts.InstanceTypeExternal:
 			return true, nil
 		}
-		klog.Warningf("node %s (providerId:%s) with invalid label: %=%,should been deleted,but exists in kubernetes", node.Name, providerID, consts.LabelInstanceType, instanceTypeValue)
+		klog.Warningf("node %s (providerId:%s) with invalid label: %s=%s,should been deleted,but exists in kubernetes", node.Name, providerID, consts.LabelInstanceType, instanceTypeValue)
 		return true, nil
 	}
 	address, err := api.NodeCCMInit(consts.ClusterId, providerID, "")
@@ -191,7 +191,7 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 	// 需要删除
 	case consts.NodeStatusDeleted:
 		//klog.Warningf("node %v is deleted by server", providerID)
-		klog.Warningf("node %q (providerId:%s) deleted from eks-server,but exists in kubernetes", node.Name, providerID)
+		klog.Warningf("node %s (providerId:%s) deleted from eks-server,but exists in kubernetes", node.Name, providerID)
 		return true, nil
 	default:
 	}
