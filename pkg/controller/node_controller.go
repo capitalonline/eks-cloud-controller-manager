@@ -442,7 +442,7 @@ func (n *NodeController) Update(ctx context.Context) error {
 			//if err := n.clientSet.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{}); err != nil {
 			//	klog.Errorf("unable to delete node %q: %v", node.Name, err)
 			//}
-			klog.Warningf("node %q (providerId:%s) deleted from eks-server,but exists in kubernetes", node.Name, node.Spec.ProviderID)
+			klog.Warningf("node %s (providerId:%s) deleted from eks-server,but exists in kubernetes", node.Name, node.Spec.ProviderID)
 		case consts.NodeStatusRunning:
 			oldNode := node.DeepCopy()
 			if err := UpdateNode(&node, details.Data); err != nil {
