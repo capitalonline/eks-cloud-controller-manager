@@ -3,6 +3,8 @@ package main
 import (
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/controller"
+	"log"
+	"net/http"
 
 	_ "github.com/capitalonline/eks-cloud-controller-manager/pkg/provider"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -16,6 +18,7 @@ import (
 	_ "k8s.io/component-base/metrics/prometheus/version"
 	"k8s.io/klog/v2"
 	"math/rand"
+	_ "net/http/pprof"
 	"time"
 )
 
@@ -50,7 +53,9 @@ func main() {
 	//app.ControllersDisabledByDefault.Insert(controller.NodeControllerKey)
 	command := app.NewCloudControllerManagerCommand(opts, cloudInitializer, controllerInitializers, fss, wait.NeverStop)
 	//command.Flags().Set("cloud-provider", "true")
-
+	go func() {
+		log.Println(http.ListenAndServe(":6060", nil))
+	}()
 	if err := command.Execute(); err != nil {
 		klog.Fatalf("unable to execute command: %v", err)
 	}

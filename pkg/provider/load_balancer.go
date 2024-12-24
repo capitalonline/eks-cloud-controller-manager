@@ -31,6 +31,7 @@ const (
 	AnnotationLbAlgorithm     = "service.beta.kubernetes.io/cds-load-balancer-algorithm"
 	AnnotationLbSubjectId     = "service.beta.kubernetes.io/cds-load-balancer-subject-id"
 	AnnotationLbBillingMethod = "service.beta.kubernetes.io/cds-load-balancer-billingmethod"
+	AnnotationLbId            = "service.beta.kubernetes.io/cds-load-balancer-id"
 	AnnotationLbListen        = "service.eks.listen"
 	LbNetTypeWan              = "wan"
 	LbNetTypeWanLan           = "wan_lan"
@@ -119,14 +120,20 @@ func (l *LoadBalancer) GetLoadBalancerName(ctx context.Context, clusterName stri
 
 // EnsureLoadBalancer 创建lb
 func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
-
+	var slbId string
 	if service.Spec.SessionAffinity != v1.ServiceAffinityNone {
 		return nil, errors.New("SessionAffinity is not supported currently, only support 'None' type")
 	}
-
+	if service.Annotations != nil && service.Annotations[AnnotationLbId] != "" {
+		slbId = service.Annotations[AnnotationLbId]
+	}
 	// 先查询lb是不是已经创建过了
 	request := lb.NewDescribeVpcSlbRequest()
-	request.SlbName = SlbName(service.Name, service.Namespace, string(service.UID))
+	if slbId != "" {
+		request.SlbID = slbId
+	} else {
+		request.SlbName = SlbName(service.Name, service.Namespace, string(service.UID))
+	}
 	response, err := api.DescribeVpcSlb(request)
 	// 调用接口有问题，接口没返回json
 	if err != nil && response == nil {
@@ -140,7 +147,6 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 		klog.Error(fmt.Sprintf("查询slb失败，response: %#v", response))
 		return nil, errors.New(response.Message)
 	}
-	var slbId string
 	// lb不存在
 	if len(response.Data.SlbId) < 1 {
 		slbId, err = l.createSlb(ctx, service, nodes)
@@ -156,7 +162,7 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 	}
 	// 重新查一遍slb信息
 	request = lb.NewDescribeVpcSlbRequest()
-	request.SlbName = SlbName(service.Name, service.Namespace, string(service.UID))
+	//request.SlbName = SlbName(service.Name, service.Namespace, string(service.UID))
 	request.SlbID = slbId
 	response, err = api.DescribeVpcSlb(request)
 	if err != nil {
@@ -453,7 +459,11 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 
 func (l *LoadBalancer) clearLbListen(ctx context.Context, clusterName string, service *v1.Service) error {
 	request := lb.NewDescribeVpcSlbRequest()
-	request.SlbName = SlbName(service.Name, service.Namespace, string(service.UID))
+	if service.Annotations != nil && service.Annotations[AnnotationLbId] != "" {
+		request.SlbID = service.Annotations[AnnotationLbId]
+	} else {
+		request.SlbName = SlbName(service.Name, service.Namespace, string(service.UID))
+	}
 	response, err := api.DescribeVpcSlb(request)
 	//klog.Info(fmt.Sprintf("清除监听：%#v ,%v", response, err))
 	if err != nil {
@@ -474,7 +484,11 @@ func (l *LoadBalancer) clearLbListen(ctx context.Context, clusterName string, se
 
 func (l *LoadBalancer) describeLbInstance(ctx context.Context, clusterName string, service *v1.Service) (*lb.DescribeVpcSlbResponse, error) {
 	request := lb.NewDescribeVpcSlbRequest()
-	request.SlbName = SlbName(service.Name, service.Namespace, string(service.UID))
+	if service.Annotations != nil && service.Annotations[AnnotationLbId] != "" {
+		request.SlbID = service.Annotations[AnnotationLbId]
+	} else {
+		request.SlbName = SlbName(service.Name, service.Namespace, string(service.UID))
+	}
 	response, err := api.DescribeVpcSlb(request)
 	if err != nil {
 		return response, err
