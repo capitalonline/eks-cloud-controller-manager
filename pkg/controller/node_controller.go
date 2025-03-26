@@ -102,6 +102,10 @@ func (n *NodeController) CollectPlayLoad(ctx context.Context) error {
 			status = consts.NodeStatusReady
 		}
 
+		if node.Spec.ProviderID == "" {
+			continue
+		}
+
 		request.NodeList = append(request.NodeList, commoneks.ModifyClusterLoadReqNode{
 			NodeId:   node.Spec.ProviderID,
 			NodeName: node.Name,
