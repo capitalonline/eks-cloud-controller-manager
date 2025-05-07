@@ -245,7 +245,9 @@ func (n *NodeController) NotifyNodeReady(ctx context.Context, event *v1.Event) {
 	if err != nil || node == nil || !NodeReady(*node) {
 		return
 	}
-
+	if node.Spec.ProviderID == "" {
+		return
+	}
 	var request = commoneks.NewModifyClusterLoadRequest()
 	request.ClusterId = consts.ClusterId
 	request.NodeList = []commoneks.ModifyClusterLoadReqNode{
@@ -302,7 +304,9 @@ func (n *NodeController) NotifyNodeDown(ctx context.Context, event *v1.Event) {
 	if len(strings.Split(node.Name, "-")) > 1 {
 		ip = strings.Split(node.Name, "-")[1]
 	}
-
+	if node.Spec.ProviderID == "" {
+		return
+	}
 	var req = commoneks.NewModifyClusterLoadRequest()
 	req.ClusterId = consts.ClusterId
 	req.NodeList = []commoneks.ModifyClusterLoadReqNode{
