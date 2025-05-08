@@ -239,6 +239,8 @@ func (n *NodeController) ListenNodes(ctx context.Context) {
 }
 
 func (n *NodeController) NotifyNodeReady(ctx context.Context, event *v1.Event) {
+	bytes, _ := json.Marshal(event)
+	klog.Infof("event: %s", string(bytes))
 	if event.InvolvedObject.Kind != consts.ResourceKindNode || event.Namespace != v1.NamespaceDefault {
 		return
 	}
