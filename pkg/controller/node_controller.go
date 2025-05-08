@@ -22,8 +22,11 @@ import (
 	"log"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 )
+
+var readyMap sync.Map
 
 type NodeController struct {
 	clientSet     *kubernetes.Clientset
@@ -209,16 +212,21 @@ func (n *NodeController) ListenNodes(ctx context.Context) {
 			case consts.EventNodeNotReady:
 				n.NotifyNodeDown(ctx, event)
 			case consts.EventNodeReady:
-				n.NotifyNodeReady(ctx, event, "add")
+				n.NotifyNodeReady(ctx, event)
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			event, _ := newObj.(*v1.Event)
+			oldEvent, _ := oldObj.(*v1.Event)
+
 			switch event.Reason {
 			case consts.EventNodeNotReady:
 				n.NotifyNodeDown(ctx, event)
 			case consts.EventNodeReady:
-				n.NotifyNodeReady(ctx, event, "update")
+				newBytes, _ := json.Marshal(event)
+				oldBytes, _ := json.Marshal(oldEvent)
+				klog.Infof("new events:%s    \nold event:%s", newBytes, oldBytes)
+				n.NotifyNodeReady(ctx, event)
 			}
 		},
 		//DeleteFunc: func(obj interface{}) {
@@ -238,9 +246,7 @@ func (n *NodeController) ListenNodes(ctx context.Context) {
 	<-ctx.Done()
 }
 
-func (n *NodeController) NotifyNodeReady(ctx context.Context, event *v1.Event, eventType string) {
-	bytes, _ := json.Marshal(event)
-	klog.Infof("%s event: %s", eventType, string(bytes))
+func (n *NodeController) NotifyNodeReady(ctx context.Context, event *v1.Event) {
 	if event.InvolvedObject.Kind != consts.ResourceKindNode || event.Namespace != v1.NamespaceDefault {
 		return
 	}
