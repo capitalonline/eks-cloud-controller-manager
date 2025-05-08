@@ -209,7 +209,7 @@ func (n *NodeController) ListenNodes(ctx context.Context) {
 			case consts.EventNodeNotReady:
 				n.NotifyNodeDown(ctx, event)
 			case consts.EventNodeReady:
-				n.NotifyNodeReady(ctx, event)
+				n.NotifyNodeReady(ctx, event, "add")
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
@@ -218,7 +218,7 @@ func (n *NodeController) ListenNodes(ctx context.Context) {
 			case consts.EventNodeNotReady:
 				n.NotifyNodeDown(ctx, event)
 			case consts.EventNodeReady:
-				n.NotifyNodeReady(ctx, event)
+				n.NotifyNodeReady(ctx, event, "update")
 			}
 		},
 		//DeleteFunc: func(obj interface{}) {
@@ -238,9 +238,9 @@ func (n *NodeController) ListenNodes(ctx context.Context) {
 	<-ctx.Done()
 }
 
-func (n *NodeController) NotifyNodeReady(ctx context.Context, event *v1.Event) {
+func (n *NodeController) NotifyNodeReady(ctx context.Context, event *v1.Event, eventType string) {
 	bytes, _ := json.Marshal(event)
-	klog.Infof("event: %s", string(bytes))
+	klog.Infof("%s event: %s", eventType, string(bytes))
 	if event.InvolvedObject.Kind != consts.ResourceKindNode || event.Namespace != v1.NamespaceDefault {
 		return
 	}
