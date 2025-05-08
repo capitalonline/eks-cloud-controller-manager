@@ -184,6 +184,7 @@ func (n *NodeController) Run(ctx context.Context) error {
 			if err != nil {
 				klog.Infoln(err)
 			}
+			klog.Info("更新负载")
 			err = n.CollectPlayLoad(ctx)
 			if err != nil {
 				klog.Infoln(err)
