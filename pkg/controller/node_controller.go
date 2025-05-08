@@ -218,7 +218,9 @@ func (n *NodeController) ListenNodes(ctx context.Context) {
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			event, _ := newObj.(*v1.Event)
 			oldEvent, _ := oldObj.(*v1.Event)
-
+			if reflect.DeepEqual(event, oldEvent) {
+				return
+			}
 			switch event.Reason {
 			case consts.EventNodeNotReady:
 				n.NotifyNodeDown(ctx, event)
