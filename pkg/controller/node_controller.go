@@ -446,6 +446,11 @@ func (n *NodeController) Update(ctx context.Context) error {
 	}
 	for i := 0; i < len(nodes.Items); i++ {
 		node := nodes.Items[i]
+
+		if node.Spec.ProviderID == "" {
+			continue
+		}
+
 		// TODO 批量查
 		details, err := api.NodeCCMInit(consts.ClusterId, node.Spec.ProviderID, "")
 		if err != nil {
