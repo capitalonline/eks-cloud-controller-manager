@@ -22,8 +22,11 @@ import (
 	"log"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 )
+
+var readyMap sync.Map
 
 type NodeController struct {
 	clientSet     *kubernetes.Clientset
@@ -184,6 +187,7 @@ func (n *NodeController) Run(ctx context.Context) error {
 			if err != nil {
 				klog.Infoln(err)
 			}
+			klog.Info("更新负载")
 			err = n.CollectPlayLoad(ctx)
 			if err != nil {
 				klog.Infoln(err)
@@ -213,10 +217,17 @@ func (n *NodeController) ListenNodes(ctx context.Context) {
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			event, _ := newObj.(*v1.Event)
+			oldEvent, _ := oldObj.(*v1.Event)
+			if reflect.DeepEqual(event, oldEvent) {
+				return
+			}
 			switch event.Reason {
 			case consts.EventNodeNotReady:
 				n.NotifyNodeDown(ctx, event)
 			case consts.EventNodeReady:
+				newBytes, _ := json.Marshal(event)
+				oldBytes, _ := json.Marshal(oldEvent)
+				klog.Infof("new events:%s    \nold event:%s", newBytes, oldBytes)
 				n.NotifyNodeReady(ctx, event)
 			}
 		},
@@ -245,7 +256,9 @@ func (n *NodeController) NotifyNodeReady(ctx context.Context, event *v1.Event) {
 	if err != nil || node == nil || !NodeReady(*node) {
 		return
 	}
-
+	if node.Spec.ProviderID == "" {
+		return
+	}
 	var request = commoneks.NewModifyClusterLoadRequest()
 	request.ClusterId = consts.ClusterId
 	request.NodeList = []commoneks.ModifyClusterLoadReqNode{
@@ -302,7 +315,9 @@ func (n *NodeController) NotifyNodeDown(ctx context.Context, event *v1.Event) {
 	if len(strings.Split(node.Name, "-")) > 1 {
 		ip = strings.Split(node.Name, "-")[1]
 	}
-
+	if node.Spec.ProviderID == "" {
+		return
+	}
 	var req = commoneks.NewModifyClusterLoadRequest()
 	req.ClusterId = consts.ClusterId
 	req.NodeList = []commoneks.ModifyClusterLoadReqNode{
@@ -431,6 +446,11 @@ func (n *NodeController) Update(ctx context.Context) error {
 	}
 	for i := 0; i < len(nodes.Items); i++ {
 		node := nodes.Items[i]
+
+		if node.Spec.ProviderID == "" {
+			continue
+		}
+
 		// TODO 批量查
 		details, err := api.NodeCCMInit(consts.ClusterId, node.Spec.ProviderID, "")
 		if err != nil {
