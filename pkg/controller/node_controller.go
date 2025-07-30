@@ -5,6 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"reflect"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/api"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
 	commoneks "github.com/capitalonline/eks-cloud-controller-manager/pkg/common/eks"
@@ -19,11 +25,6 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	metrics "k8s.io/metrics/pkg/client/clientset/versioned"
-	"log"
-	"reflect"
-	"strings"
-	"sync"
-	"time"
 )
 
 var readyMap sync.Map
@@ -104,11 +105,13 @@ func (n *NodeController) CollectPlayLoad(ctx context.Context) error {
 		if NodeReady(node) {
 			status = consts.NodeStatusReady
 		}
-
 		if node.Spec.ProviderID == "" {
 			continue
 		}
-
+		scheduleStr := "1"
+		if node.Spec.Unschedulable == true {
+			scheduleStr = "0"
+		}
 		request.NodeList = append(request.NodeList, commoneks.ModifyClusterLoadReqNode{
 			NodeId:   node.Spec.ProviderID,
 			NodeName: node.Name,
@@ -122,7 +125,8 @@ func (n *NodeController) CollectPlayLoad(ctx context.Context) error {
 			//	Limits:   load.Mem.Limits,
 			//	Requests: load.Mem.Requests,
 			//},
-			Status: status,
+			Status:      status,
+			ScheduleStr: scheduleStr,
 		})
 	}
 	_, err = api.ModifyClusterLoad(request)
