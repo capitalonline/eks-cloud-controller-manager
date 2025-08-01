@@ -3,7 +3,7 @@ RUN mkdir /app
 RUN mkdir /app/bin
 COPY . /app/
 RUN go env -w GO111MODULE=on
-RUN go env -w GOPROXY=https://goproxy.cn,direct
+RUN go env -w GOPROXY=https://goproxy.io,direct
 RUN go env
 
 ARG bin_file
