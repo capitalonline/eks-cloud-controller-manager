@@ -2,6 +2,7 @@ package eks
 
 import (
 	"encoding/json"
+
 	cdshttp "github.com/capitalonline/eks-cloud-controller-manager/pkg/utils/http"
 )
 
@@ -133,11 +134,12 @@ type ModifyClusterLoadResponse struct {
 }
 
 type ModifyClusterLoadReqNode struct {
-	NodeId   string        `json:"NodeId"`
-	Cpu      *ResourceInfo `json:"Cpu,omitempty"`
-	Memory   *ResourceInfo `json:"Memory,omitempty"`
-	Status   string        `json:"Status"`
-	NodeName string        `json:"-"`
+	NodeId      string        `json:"NodeId"`
+	Cpu         *ResourceInfo `json:"Cpu,omitempty"`
+	Memory      *ResourceInfo `json:"Memory,omitempty"`
+	Status      string        `json:"Status"`
+	ScheduleStr string        `json:"ScheduleStr"`
+	NodeName    string        `json:"-"`
 }
 
 type NodeLoad struct {
