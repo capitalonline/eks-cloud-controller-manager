@@ -2,16 +2,17 @@ package provider
 
 import (
 	"fmt"
-	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
 	"io"
+	"log"
+	"time"
+
+	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	cloudprovider "k8s.io/cloud-provider"
-	"log"
-	"time"
 )
 
 var _ cloudprovider.Interface = (*Cloud)(nil)

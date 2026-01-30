@@ -2,18 +2,19 @@ package lb
 
 import (
 	"encoding/json"
+
 	cdshttp "github.com/capitalonline/eks-cloud-controller-manager/pkg/utils/http"
 )
 
 type PackageCreateSlbRequest struct {
 	*cdshttp.BaseRequest
-	UserId            string                        `json:"-"`
-	CustomerId        string                        `json:"-"`
-	VpcId             string                        `json:"VpcId"`
-	AvailableZoneCode string                        `json:"AvailableZoneCode"`
-	Level             int                           `json:"Level,omitempty"`
-	SlbInfo           PackageCreateSlbInfo          `json:"SlbInfo"`
-	BandwidthInfo     PackageCreateSlbBandwidthInfo `json:"BandwidthInfo"`
+	UserId            string                         `json:"-"`
+	CustomerId        string                         `json:"-"`
+	VpcId             string                         `json:"VpcId"`
+	AvailableZoneCode string                         `json:"AvailableZoneCode"`
+	Level             int                            `json:"Level,omitempty"`
+	SlbInfo           PackageCreateSlbInfo           `json:"SlbInfo"`
+	BandwidthInfo     *PackageCreateSlbBandwidthInfo `json:"BandwidthInfo,omitempty"`
 }
 
 type PackageCreateSlbInfo struct {
