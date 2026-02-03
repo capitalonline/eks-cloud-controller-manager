@@ -38,6 +38,20 @@ func PackageCreateSlb(request *lb.PackageCreateSlbRequest) (*lb.PackageCreateSlb
 	return response, err
 }
 
+func StandardCreateSlb(request *lb.StandardCreateSlbRequest) (*lb.StandardCreateSlbResponse, error) {
+	credential := utils.NewCredential(consts.AccessKeyID, consts.AccessKeySecret)
+
+	cpf := profile.NewClientProfile()
+	cpf.HttpProfile.ReqMethod = http.MethodPost
+	cpf.HttpProfile.Endpoint = consts.LbApiHost
+	client, _ := lb.NewClient(credential, consts.Region, cpf)
+	response, err := client.StandardCreateSlb(request)
+	if err != nil {
+		return nil, err
+	}
+	return response, err
+}
+
 func VpcSlbBillingScheme(request *lb.VpcSlbBillingSchemeRequest) (*lb.VpcSlbBillingSchemeResponse, error) {
 	credential := utils.NewCredential(consts.AccessKeyID, consts.AccessKeySecret)
 

@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math/rand"
 	"strconv"
 	"strings"
 	"time"
@@ -37,8 +36,8 @@ const (
 	AnnotationLbSubjectId     = "service.beta.kubernetes.io/cds-load-balancer-subject-id"
 	AnnotationLbBillingMethod = "service.beta.kubernetes.io/cds-load-balancer-billingmethod"
 
-	LabelNodeAz     = "node.kubernetes.io/node.az"
-	LabelNodeAzCode = "node.kubernetes.io/node.az-code"
+	LabelNodeRegionCode = "topology.kubernetes.io/region"
+	LabelNodeAzCode     = "node.kubernetes.io/node.az-code"
 )
 
 const (
@@ -46,8 +45,10 @@ const (
 	LbNetTypeWanLan = "wan_lan"
 
 	LbBillingMethodCostPay = "0" // 按需计费
-	DefaultBillingType     = "number"
 	BandwidthShared        = "shared"
+
+	DefaultBillingType    = "number"
+	FlowDemandBillingType = "flow_demand"
 
 	LbTaskSuccess = "success"
 	LbTakError    = "error"
@@ -82,6 +83,12 @@ var lbSpecMap = map[string]string{
 	LBSpecHigh:     LBSpecNameHigh,
 	LBSpecSuper:    LBSpecNameSuper,
 	LBSpecExtreme:  LBSpecNameExtreme,
+}
+
+var lbConfMap = map[string]string{
+	LBSpecHigh:    "slb.v1.small",
+	LBSpecSuper:   "slb.v1.medium",
+	LBSpecExtreme: "slb.v1.large",
 }
 
 var SLBNotFound error = errors.New("slb not found")
@@ -254,38 +261,27 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service) (*lb.
 	}
 
 	// 获取可用区信息
-	azCode, err := l.getAvailableZone(ctx)
+	regionCode, azCode, err := l.getAvailableZone(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get available zone: %w", err)
 	}
+	taskId := ""
+	switch params.lbNetworkType {
+	case PrivateNetwork:
+		taskId, err = l.createStandardSlb(regionCode, azCode, service, params)
+		if err != nil {
+			return nil, err
+		}
 
-	// 获取计费方案
-	billingSchemeId, err := l.getBillingSchemeId(azCode, params.lbSpec)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get billing scheme: %w", err)
-	}
-
-	// 获取带宽计费方案
-	bandwidthBillingSchemeId, err := l.getBandwidthBillingSchemeId(azCode, params.billingMethod)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get bandwidth billing scheme: %w", err)
-	}
-
-	// 构建创建请求
-	request := l.buildCreateSlbRequest(service, params, azCode, billingSchemeId, bandwidthBillingSchemeId)
-
-	// 发起创建请求
-	response, err := api.PackageCreateSlb(request)
-	if err != nil || response == nil {
-		return nil, fmt.Errorf("API call PackageCreateSlb failed: %w", err)
-	}
-
-	if response.Code != consts.LbRequestSuccess {
-		return nil, fmt.Errorf("create lb failed, code: %s, message: %s", response.Code, response.Message)
+	default:
+		taskId, err = l.createPackageSlb(azCode, service, params)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// 等待任务完成
-	if err = l.describeTask(response.TaskId); err != nil {
+	if err = l.describeTask(taskId); err != nil {
 		return nil, err
 	}
 
@@ -295,6 +291,62 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service) (*lb.
 	}
 
 	return &describeResp.Data, nil
+}
+
+func (l *LoadBalancer) createPackageSlb(azCode string, service *v1.Service, params *serviceParams) (string, error) {
+	// 获取计费方案
+	billingSchemeId, err := l.getBillingSchemeId(azCode, params.lbSpec)
+	if err != nil {
+		return "", fmt.Errorf("failed to get billing scheme: %w", err)
+	}
+
+	// 获取带宽计费方案
+	bandwidthBillingSchemeId, err := l.getBandwidthBillingSchemeId(azCode, params.billingMethod)
+	if err != nil {
+		return "", fmt.Errorf("failed to get bandwidth billing scheme: %w", err)
+	}
+	if bandwidthBillingSchemeId == "" {
+		return "", fmt.Errorf("billing method '%s' not found", params.billingMethod)
+	}
+
+	// 构建创建请求
+	request := l.buildCreateSlbRequest(service, params, azCode, billingSchemeId, bandwidthBillingSchemeId)
+
+	// 发起创建请求
+	response, err := api.PackageCreateSlb(request)
+	if err != nil || response == nil {
+		return "", fmt.Errorf("API call PackageCreateSlb failed: %w", err)
+	}
+
+	if response.Code != consts.LbRequestSuccess {
+		return "", fmt.Errorf("create package lb failed, code: %s, message: %s", response.Code, response.Message)
+	}
+
+	return response.TaskId, nil
+}
+
+func (l *LoadBalancer) createStandardSlb(regionCode, azCode string, service *v1.Service, params *serviceParams) (string, error) {
+	req := lb.NewStandardCreateSlbRequest()
+	req.RegionCode = regionCode
+	req.AvailableZoneCode = azCode
+	req.Name = SlbName(service.Name, service.Namespace, string(service.UID))
+	req.VpcId = consts.VpcID
+	req.NetType = LbNetTypeWanLan
+
+	confType := lbConfMap[params.lbSpec]
+	if confType == "" {
+		return "", fmt.Errorf("not fount lb conf type '%s'", params.lbSpec)
+	}
+	req.ConfType = confType
+	response, err := api.StandardCreateSlb(req)
+	if err != nil || response == nil {
+		return "", fmt.Errorf("API call StandardCreateSlb failed: %w", err)
+	}
+
+	if response.Code != consts.LbRequestSuccess {
+		return "", fmt.Errorf("create standard lb failed, code: %s, message: %s", response.Code, response.Message)
+	}
+	return response.TaskId, nil
 }
 
 // 解析服务参数
@@ -318,7 +370,7 @@ func (l *LoadBalancer) parseServiceParams(service *v1.Service) (*serviceParams, 
 
 	lbTypeStr := service.Annotations[AnnotationLbType]
 	if lbTypeStr == "" {
-		return nil, fmt.Errorf("missing required annotation: %s", AnnotationLbType)
+		lbTypeStr = "4"
 	}
 	lbType, err := strconv.ParseInt(lbTypeStr, 10, 64)
 	if err != nil {
@@ -330,14 +382,18 @@ func (l *LoadBalancer) parseServiceParams(service *v1.Service) (*serviceParams, 
 		return nil, fmt.Errorf("missing required annotation: %s", AnnotationLbSpec)
 	}
 
+	// 带宽计费方式
 	billingMethod := service.Annotations[AnnotationLbBillingMethod]
-	if billingMethod == "" {
+	switch billingMethod {
+	case DefaultBillingType, FlowDemandBillingType:
+	default:
 		billingMethod = DefaultBillingType
 	}
 
+	// 固定带宽
 	lbBandwidthStr := service.Annotations[AnnotationLbBandwidth]
 	if lbBandwidthStr == "" {
-		return nil, fmt.Errorf("missing required annotation: %s", AnnotationLbBandwidth)
+		lbBandwidthStr = "50"
 	}
 	lbBandwidth, err := strconv.ParseInt(lbBandwidthStr, 10, 64)
 	if err != nil {
@@ -346,7 +402,7 @@ func (l *LoadBalancer) parseServiceParams(service *v1.Service) (*serviceParams, 
 
 	networkType := service.Annotations[AnnotationLbNetwork]
 	if networkType == "" {
-		return nil, fmt.Errorf("missing required annotation: %s", AnnotationLbNetwork)
+		networkType = PublicNetwork
 	}
 
 	lbEipStr := service.Annotations[AnnotationLbEip]
@@ -396,37 +452,34 @@ func (l *LoadBalancer) getProtocol(service *v1.Service) string {
 }
 
 // 获取可用区
-func (l *LoadBalancer) getAvailableZone(ctx context.Context) (string, error) {
+func (l *LoadBalancer) getAvailableZone(ctx context.Context) (string, string, error) {
 	nodeList, err := l.clientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return "", fmt.Errorf("failed to list nodes: %w", err)
+		return "", "", fmt.Errorf("failed to list nodes: %w", err)
 	}
 
 	if nodeList == nil || len(nodeList.Items) == 0 {
-		return "", errors.New("no nodes found in the cluster")
+		return "", "", errors.New("no nodes found in the cluster")
 	}
 
-	var azList []string
+	var (
+		regionCode, azCode string
+	)
 	for _, node := range nodeList.Items {
 		if node.Labels != nil {
 			if az, ok := node.Labels[LabelNodeAzCode]; ok && az != "" {
-				azList = append(azList, strings.TrimSpace(az))
+				azCode = strings.TrimSpace(az)
 			}
+			if region, ok := node.Labels[LabelNodeRegionCode]; ok && region != "" {
+				regionCode = strings.TrimSpace(region)
+			}
+		}
+		if regionCode != "" && azCode != "" {
+			break
 		}
 	}
 
-	if len(azList) == 0 {
-		return "", errors.New("no available zones found from node labels")
-	}
-
-	randomIndex := rand.Intn(len(azList))
-	azCode := strings.TrimSpace(azList[randomIndex])
-
-	if azCode == "" {
-		return "", errors.New("available zone code is empty")
-	}
-
-	return azCode, nil
+	return regionCode, azCode, nil
 }
 
 // 获取计费方案ID
@@ -483,14 +536,7 @@ func (l *LoadBalancer) getBandwidthBillingSchemeId(azCode, billingMethod string)
 			}
 		}
 	}
-
-	// 如果没找到指定类型，使用第一个可用方案
-	firstScheme := bandwidthResp.Data[0]
-	if len(firstScheme.BillingScheme) == 0 {
-		return "", errors.New("no valid billing schemes found")
-	}
-
-	return firstScheme.BillingScheme[0].BillingSchemeId, nil
+	return "", nil
 }
 
 // 构建创建SLB请求
@@ -577,12 +623,12 @@ func (l *LoadBalancer) filterSelectedVips(vipList []lb.DescribeVpcSlbResponseVip
 
 	for _, vipInfo := range vipList {
 		// 匹配公网IP (eip)
-		if vipInfo.VipType == "eip" && params.lbEip != "" && vipInfo.Vip == params.lbEip {
+		if vipInfo.VipType == EIP && params.lbEip != "" && vipInfo.Vip == params.lbEip {
 			selectedVips = append(selectedVips, vipInfo)
 			continue
 		}
 		// 匹配私网IP (private)
-		if vipInfo.VipType == "private" && params.lbVip != "" && vipInfo.Vip == params.lbVip {
+		if vipInfo.VipType == PrivateNetwork && params.lbVip != "" && vipInfo.Vip == params.lbVip {
 			selectedVips = append(selectedVips, vipInfo)
 		}
 	}
@@ -822,6 +868,9 @@ func (l *LoadBalancer) describeLbInstance(ctx context.Context, service *v1.Servi
 }
 
 func (l *LoadBalancer) describeTask(taskId string) error {
+	if taskId == "" {
+		return errors.New("taskId is empty")
+	}
 	for i := 0; i < 100; i++ {
 		resp, err := api.DescribeTask(taskId)
 		if err != nil {

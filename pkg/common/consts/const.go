@@ -26,6 +26,8 @@ const (
 	ActionVpcSlbBillingScheme       = "VpcSlbBillingScheme" // slb计费查询
 	ActionVpcBandwidthBillingScheme = "BandwidthBillingScheme"
 	ActionSendAlarm                 = "EKSAlarm"
+
+	ActionStandardCreateVpcSlb = "CreateVpcSlb"
 )
 
 const (

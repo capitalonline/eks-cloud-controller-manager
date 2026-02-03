@@ -47,14 +47,14 @@ func (r *PackageCreateSlbRequest) FromJsonString(s string) error {
 
 type PackageCreateSlbResponse struct {
 	*cdshttp.BaseResponse
-	Data      PackageCreateSlbResponseData `json:"Data"`
-	Code      string                       `json:"Code"`
-	Message   string                       `json:"Message"`
-	RequestId string                       `json:"RequestId"`
-	TaskId    string                       `json:"TaskId"`
+	Data      CreateSlbResponseData `json:"Data"`
+	Code      string                `json:"Code"`
+	Message   string                `json:"Message"`
+	RequestId string                `json:"RequestId"`
+	TaskId    string                `json:"TaskId"`
 }
 
-type PackageCreateSlbResponseData struct {
+type CreateSlbResponseData struct {
 	SlbId string `json:"SlbId"`
 }
 
@@ -64,6 +64,45 @@ func (r *PackageCreateSlbResponse) ToJsonString() string {
 }
 
 func (r *PackageCreateSlbResponse) FromJsonString(s string) error {
+	return json.Unmarshal([]byte(s), &r)
+}
+
+type StandardCreateSlbRequest struct {
+	*cdshttp.BaseRequest
+	UserId            string `json:"-"`
+	CustomerId        string `json:"-"`
+	RegionCode        string `json:"RegionCode"`
+	AvailableZoneCode string `json:"AvailableZoneCode"`
+	VpcId             string `json:"VpcId"`
+	Name              string `json:"Name"`
+	NetType           string `json:"NetType"`
+	ConfType          string `json:"ConfType"`
+}
+
+func (r *StandardCreateSlbRequest) ToJsonString() string {
+	b, _ := json.Marshal(r)
+	return string(b)
+}
+
+func (r *StandardCreateSlbRequest) FromJsonString(s string) error {
+	return json.Unmarshal([]byte(s), &r)
+}
+
+type StandardCreateSlbResponse struct {
+	*cdshttp.BaseResponse
+	Data      CreateSlbResponseData `json:"Data"`
+	Code      string                `json:"Code"`
+	Message   string                `json:"Message"`
+	RequestId string                `json:"RequestId"`
+	TaskId    string                `json:"TaskId"`
+}
+
+func (r *StandardCreateSlbResponse) ToJsonString() string {
+	b, _ := json.Marshal(r)
+	return string(b)
+}
+
+func (r *StandardCreateSlbResponse) FromJsonString(s string) error {
 	return json.Unmarshal([]byte(s), &r)
 }
 

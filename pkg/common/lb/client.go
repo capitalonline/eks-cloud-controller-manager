@@ -28,8 +28,22 @@ func NewPackageCreateSlbRequest() (request *PackageCreateSlbRequest) {
 	return
 }
 
+func NewStandardCreateSlbRequest() (request *StandardCreateSlbRequest) {
+	request = &StandardCreateSlbRequest{
+		BaseRequest: &cdshttp.BaseRequest{},
+	}
+	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionStandardCreateVpcSlb)
+	request.SetDomain(consts.LbApiHost)
+	return
+}
+
 func NewPackageCreateSlbResponse() (response *PackageCreateSlbResponse) {
 	response = &PackageCreateSlbResponse{BaseResponse: &cdshttp.BaseResponse{}}
+	return
+}
+
+func NewStandardCreateSlbResponse() (response *StandardCreateSlbResponse) {
+	response = &StandardCreateSlbResponse{BaseResponse: &cdshttp.BaseResponse{}}
 	return
 }
 
@@ -42,6 +56,14 @@ func (c *Client) PackageCreateSlb(request *PackageCreateSlbRequest) (response *P
 	return
 }
 
+func (c *Client) StandardCreateSlb(request *StandardCreateSlbRequest) (response *StandardCreateSlbResponse, err error) {
+	if request == nil {
+		request = NewStandardCreateSlbRequest()
+	}
+	response = NewStandardCreateSlbResponse()
+	err = c.Send(request, response)
+	return
+}
 func NewDescribeVpcSlbRequest() (request *DescribeVpcSlbRequest) {
 	request = &DescribeVpcSlbRequest{
 		BaseRequest: &cdshttp.BaseRequest{},
