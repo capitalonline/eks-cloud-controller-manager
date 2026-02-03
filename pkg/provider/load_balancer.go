@@ -23,9 +23,9 @@ import (
 const EKS = "eks"
 
 const (
-	AnnotationLbId  = "service.beta.kubernetes.io/cds-load-balancer-id"
-	AnnotationLbEip = "service.beta.kubernetes.io/cds-load-balancer-eip-addr"
-	AnnotationLbVip = "service.beta.kubernetes.io/cds-load-balancer-vip-addr"
+	AnnotationLbId  = "service.beta.kubernetes.io/cds-select-slb-id"
+	AnnotationLbEip = "service.beta.kubernetes.io/cds-select-slb-eip-addr"
+	AnnotationLbVip = "service.beta.kubernetes.io/cds-select-slb-vip-addr"
 
 	AnnotationLbNetwork   = "service.beta.kubernetes.io/cds-load-balancer-network"
 	AnnotationLbProtocol  = "service.beta.kubernetes.io/cds-load-balancer-protocol"
@@ -67,9 +67,14 @@ const (
 	UpdateListenFull  = "full"  // 全量更新
 	UpdateListenExact = "exact" // 精确更新
 
-	AllNetwork      = "all"
-	PublicNetwork   = "public"
-	InternalNetwork = "internal"
+	AllNetwork     = "all"
+	PublicNetwork  = "public"
+	PrivateNetwork = "private"
+	EIP            = "eip"
+
+	LbAlgorithmRr   = "rr"
+	LbAlgorithmWrr  = "wrr"
+	LbAlgorithmHash = "conhash"
 )
 
 var lbSpecMap = map[string]string{
@@ -83,13 +88,16 @@ var SLBNotFound error = errors.New("slb not found")
 
 // 服务参数结构体
 type serviceParams struct {
-	subjectId     int
-	lbType        int64
-	lbSpec        string
-	billingMethod string
-	lbBandwidth   int64
-	lbEip         string
-	lbVip         string
+	subjectId          int
+	lbType             int64
+	lbSpec             string
+	billingMethod      string
+	lbBandwidth        int64
+	lbEip              string
+	lbVip              string
+	selectSLB          string
+	lbNetworkType      string
+	ingressStatusIpMap map[string]bool
 }
 
 type LoadBalancer struct {
@@ -152,6 +160,26 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 	return l.getLoadBalancerStatus(slbInfo.SlbId)
 }
 
+func (l *LoadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
+	resp, err := l.describeLbInstance(ctx, service)
+	if err != nil {
+		return fmt.Errorf("UpdateLoadBalancer failed, describe SLB error: %w", err)
+	}
+	return l.updateLbListen(ctx, service, nodes, &resp.Data)
+}
+
+func (l *LoadBalancer) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
+	response, err := l.describeLbInstance(ctx, service)
+	if err != nil {
+		if errors.Is(err, SLBNotFound) {
+			return nil
+		}
+		return fmt.Errorf("EnsureLoadBalancerDeleted failed, describe SLB error: %w", err)
+	}
+
+	return l.clearLbListen(ctx, service, &response.Data)
+}
+
 // validateService 验证服务配置的有效性
 func (l *LoadBalancer) validateService(service *v1.Service) error {
 	if service.Spec.SessionAffinity != v1.ServiceAffinityNone {
@@ -209,43 +237,20 @@ func (l *LoadBalancer) getLoadBalancerStatus(slbId string) (*v1.LoadBalancerStat
 	}, nil
 }
 
-func (l *LoadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
-	resp, err := l.describeLbInstance(ctx, service)
-	if err != nil {
-		return fmt.Errorf("UpdateLoadBalancer failed, describe SLB error: %w", err)
-	}
-	return l.updateLbListen(ctx, service, nodes, &resp.Data)
-}
-
-func (l *LoadBalancer) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
-	response, err := l.describeLbInstance(ctx, service)
-	if err != nil {
-		if errors.Is(err, SLBNotFound) {
-			return nil
-		}
-		return fmt.Errorf("EnsureLoadBalancerDeleted failed, describe SLB error: %w", err)
-	}
-
-	return l.clearLbListen(ctx, &response.Data)
-}
-
 func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service) (*lb.DescribeVpcSlbResponseSlbInfo, error) {
 	// 输入验证
 	if service == nil {
 		return nil, errors.New("service cannot be nil")
-	}
-	if len(service.Annotations) == 0 {
-		return nil, errors.New("service annotations is null")
-	}
-
-	if service.Annotations[AnnotationLbId] != "" {
-		return nil, SLBNotFound
 	}
 
 	// 解析和验证服务参数
 	params, err := l.parseServiceParams(service)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse service parameters: %w", err)
+	}
+
+	if params.selectSLB != "" {
+		return nil, SLBNotFound
 	}
 
 	// 获取可用区信息
@@ -294,7 +299,15 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service) (*lb.
 
 // 解析服务参数
 func (l *LoadBalancer) parseServiceParams(service *v1.Service) (*serviceParams, error) {
-	var subjectId int
+	var (
+		subjectId int
+		m         = make(map[string]bool)
+	)
+
+	if len(service.Annotations) == 0 {
+		return nil, errors.New("service annotations is null")
+	}
+
 	if subjectIdStr := service.Annotations[AnnotationLbSubjectId]; subjectIdStr != "" {
 		id, err := strconv.ParseInt(subjectIdStr, 10, 64)
 		if err != nil {
@@ -331,7 +344,23 @@ func (l *LoadBalancer) parseServiceParams(service *v1.Service) (*serviceParams, 
 		return nil, fmt.Errorf("invalid bandwidth '%s': %w", lbBandwidthStr, err)
 	}
 
+	networkType := service.Annotations[AnnotationLbNetwork]
+	if networkType == "" {
+		return nil, fmt.Errorf("missing required annotation: %s", AnnotationLbNetwork)
+	}
+
 	lbEipStr := service.Annotations[AnnotationLbEip]
+	lbVipStr := service.Annotations[AnnotationLbVip]
+	selectSlb := service.Annotations[AnnotationLbId]
+
+	if len(service.Status.LoadBalancer.Ingress) > 0 {
+		for _, ingress := range service.Status.LoadBalancer.Ingress {
+			if ingress.IP != "" {
+				m[ingress.IP] = true
+			}
+		}
+		klog.Infof("get lb ingress ip status: %v", m)
+	}
 
 	// 验证参数范围
 	if lbType <= 0 {
@@ -342,13 +371,28 @@ func (l *LoadBalancer) parseServiceParams(service *v1.Service) (*serviceParams, 
 	}
 
 	return &serviceParams{
-		subjectId:     subjectId,
-		lbType:        lbType,
-		lbSpec:        lbSpec,
-		billingMethod: billingMethod,
-		lbBandwidth:   lbBandwidth,
-		lbEip:         lbEipStr,
+		subjectId:          subjectId,
+		lbType:             lbType,
+		lbSpec:             lbSpec,
+		billingMethod:      billingMethod,
+		lbBandwidth:        lbBandwidth,
+		lbEip:              lbEipStr,
+		lbVip:              lbVipStr,
+		selectSLB:          selectSlb,
+		lbNetworkType:      networkType,
+		ingressStatusIpMap: m,
 	}, nil
+}
+
+func (l *LoadBalancer) getProtocol(service *v1.Service) string {
+	if service.Annotations == nil {
+		return "TCP"
+	}
+	protocol, ok := service.Annotations[AnnotationLbProtocol]
+	if !ok {
+		return "TCP"
+	}
+	return protocol
 }
 
 // 获取可用区
@@ -452,6 +496,10 @@ func (l *LoadBalancer) getBandwidthBillingSchemeId(azCode, billingMethod string)
 // 构建创建SLB请求
 func (l *LoadBalancer) buildCreateSlbRequest(service *v1.Service, params *serviceParams, azCode, billingSchemeId, bandwidthBillingSchemeId string) *lb.PackageCreateSlbRequest {
 	slbName := SlbName(service.Name, service.Namespace, string(service.UID))
+	netType := LbNetTypeWan
+	if params.lbNetworkType == AllNetwork {
+		netType = LbNetTypeWanLan
+	}
 
 	request := lb.NewPackageCreateSlbRequest()
 	request.AvailableZoneCode = azCode
@@ -459,7 +507,7 @@ func (l *LoadBalancer) buildCreateSlbRequest(service *v1.Service, params *servic
 	request.Level = int(params.lbType)
 	request.SlbInfo = lb.PackageCreateSlbInfo{
 		BillingSchemeId: billingSchemeId,
-		NetType:         LbNetTypeWan,
+		NetType:         netType,
 		Name:            slbName,
 		SubjectId:       params.subjectId,
 	}
@@ -481,16 +529,25 @@ func (l *LoadBalancer) buildCreateSlbRequest(service *v1.Service, params *servic
 
 func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, nodes []*v1.Node, slbInfo *lb.DescribeVpcSlbResponseSlbInfo) error {
 	// 获取VIP地址
-	vip, err := l.extractVipFromResponse(slbInfo)
+	params, err := l.parseServiceParams(service)
 	if err != nil {
 		return err
+	}
+
+	vipList, err := l.extractVipFromResponse(slbInfo, params)
+	if err != nil {
+		return err
+	}
+
+	if len(vipList) == 0 {
+		return errors.New("SLB ip resources are not ready")
 	}
 
 	// 获取调度算法
 	algorithm := l.getSchedulerAlgorithm(service)
 
 	// 构建监听器列表
-	listeners, err := l.buildListeners(service, nodes, vip, algorithm)
+	listeners, err := l.buildListeners(service, nodes, algorithm, vipList)
 	if err != nil {
 		return fmt.Errorf("failed to build listeners: %w", err)
 	}
@@ -500,44 +557,122 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 }
 
 // extractVipFromResponse 从响应中提取VIP地址
-func (l *LoadBalancer) extractVipFromResponse(slbInfo *lb.DescribeVpcSlbResponseSlbInfo) (string, error) {
-	// todo 增加判断内网vip逻辑
-	for _, vipInfo := range slbInfo.VipList {
-		if vipInfo.Vip != "" {
-			return vipInfo.Vip, nil
+func (l *LoadBalancer) extractVipFromResponse(slbInfo *lb.DescribeVpcSlbResponseSlbInfo, params *serviceParams) ([]*lb.DescribeVpcSlbResponseVipInfo, error) {
+	if slbInfo == nil || params == nil {
+		return nil, errors.New("slbInfo cannot be nil")
+	}
+
+	// 根据是否指定特定SLB来筛选IP
+	if params.selectSLB != "" {
+		return l.filterSelectedVips(slbInfo.VipList, params)
+	}
+
+	// 根据网络类型进一步过滤IP
+	return l.filterVipsByNetworkType(slbInfo.VipList, params)
+}
+
+// filterSelectedVips 根据用户指定的公网IP和私网IP筛选VIP
+func (l *LoadBalancer) filterSelectedVips(vipList []lb.DescribeVpcSlbResponseVipInfo, params *serviceParams) ([]*lb.DescribeVpcSlbResponseVipInfo, error) {
+	var selectedVips []lb.DescribeVpcSlbResponseVipInfo
+
+	for _, vipInfo := range vipList {
+		// 匹配公网IP (eip)
+		if vipInfo.VipType == "eip" && params.lbEip != "" && vipInfo.Vip == params.lbEip {
+			selectedVips = append(selectedVips, vipInfo)
+			continue
+		}
+		// 匹配私网IP (private)
+		if vipInfo.VipType == "private" && params.lbVip != "" && vipInfo.Vip == params.lbVip {
+			selectedVips = append(selectedVips, vipInfo)
 		}
 	}
-	return "", errors.New("SLB resources are not ready")
+
+	return l.filterVipsByNetworkType(selectedVips, params)
+}
+
+// filterVipsByNetworkType 根据网络类型过滤VIP
+func (l *LoadBalancer) filterVipsByNetworkType(vipList []lb.DescribeVpcSlbResponseVipInfo, params *serviceParams) ([]*lb.DescribeVpcSlbResponseVipInfo, error) {
+	var public, private *lb.DescribeVpcSlbResponseVipInfo
+
+	if len(params.ingressStatusIpMap) > 0 {
+		for _, vipInfo := range vipList {
+			_, ok := params.ingressStatusIpMap[vipInfo.Vip]
+			if vipInfo.VipType == EIP && ok {
+				public = &vipInfo
+			}
+			if vipInfo.VipType == PrivateNetwork && ok {
+				private = &vipInfo
+			}
+		}
+	} else {
+		for _, vipInfo := range vipList {
+			if vipInfo.VipType == EIP {
+				public = &vipInfo
+			}
+			if vipInfo.VipType == PrivateNetwork {
+				private = &vipInfo
+			}
+		}
+	}
+
+	switch params.lbNetworkType {
+	case AllNetwork:
+		if public != nil && private != nil {
+			return []*lb.DescribeVpcSlbResponseVipInfo{public, private}, nil
+		}
+
+	case PublicNetwork:
+		if public != nil {
+			return []*lb.DescribeVpcSlbResponseVipInfo{public}, nil
+		}
+
+	case PrivateNetwork:
+		if private != nil {
+			return []*lb.DescribeVpcSlbResponseVipInfo{private}, nil
+		}
+
+	default:
+		return nil, fmt.Errorf("invalid network type: %s", params.lbNetworkType)
+	}
+
+	return nil, nil
 }
 
 // getSchedulerAlgorithm 获取调度算法，如果没有设置则使用默认值
 func (l *LoadBalancer) getSchedulerAlgorithm(service *v1.Service) string {
 	algorithm, ok := service.Annotations[AnnotationLbAlgorithm]
-	if !ok || algorithm == "" {
-		return "rr" // 默认使用轮询算法
+	if !ok {
+		return LbAlgorithmRr
 	}
-	return algorithm
+	switch algorithm {
+	case LbAlgorithmRr, LbAlgorithmWrr, LbAlgorithmHash:
+		return algorithm
+	default:
+		return LbAlgorithmRr
+	}
 }
 
 // buildListeners 构建监听器列表
-func (l *LoadBalancer) buildListeners(service *v1.Service, nodes []*v1.Node, vip, algorithm string) ([]lb.VpcSlbUpdateListenRequestListen, error) {
+func (l *LoadBalancer) buildListeners(service *v1.Service, nodes []*v1.Node, algorithm string, vipList []*lb.DescribeVpcSlbResponseVipInfo) ([]lb.VpcSlbUpdateListenRequestListen, error) {
 	var listeners []lb.VpcSlbUpdateListenRequestListen
-
+	protocol := l.getProtocol(service)
 	for _, port := range service.Spec.Ports {
-		listener, err := l.buildListener(service, &port, nodes, vip, algorithm)
-		if err != nil {
-			return nil, fmt.Errorf("failed to build listener for port %d: %w", port.Port, err)
+		for _, vip := range vipList {
+			listener, err := l.buildListener(&port, nodes, protocol, algorithm, vip)
+			if err != nil {
+				return nil, fmt.Errorf("failed to build listener for port %d: %w", port.Port, err)
+			}
+			listeners = append(listeners, listener)
 		}
-		listeners = append(listeners, listener)
 	}
 
 	return listeners, nil
 }
 
 // buildListener 构建单个监听器
-func (l *LoadBalancer) buildListener(service *v1.Service, port *v1.ServicePort, nodes []*v1.Node, vip, algorithm string) (lb.VpcSlbUpdateListenRequestListen, error) {
+func (l *LoadBalancer) buildListener(port *v1.ServicePort, nodes []*v1.Node, protocol, algorithm string, vip *lb.DescribeVpcSlbResponseVipInfo) (lb.VpcSlbUpdateListenRequestListen, error) {
 	// 生成监听器名称
-	listenName := l.generateListenName(vip, port.Port)
+	listenName := l.generateListenName(vip.Vip, port.Port)
 
 	// 构建真实服务器列表
 	rsList, err := l.buildRealServerList(nodes, port)
@@ -547,15 +682,15 @@ func (l *LoadBalancer) buildListener(service *v1.Service, port *v1.ServicePort, 
 
 	// 创建监听器对象
 	listener := lb.VpcSlbUpdateListenRequestListen{
-		ListenIp:       vip,
+		ListenIp:       vip.Vip,
 		ListenPort:     int(port.Port),
-		ListenProtocol: string(port.Protocol),
+		ListenProtocol: protocol,
 		Scheduler:      algorithm,
 		ListenName:     listenName,
 		Timeout:        10, // 默认超时时间10秒
 		RsList:         rsList,
 		HealthCheck: lb.VpcSlbUpdateListenRequestHealthCheck{
-			Protocol:         string(port.Protocol),
+			Protocol:         protocol,
 			ConnectTimeout:   5,
 			Retry:            3,
 			DelayLoop:        10,
@@ -569,7 +704,7 @@ func (l *LoadBalancer) buildListener(service *v1.Service, port *v1.ServicePort, 
 // generateListenName 生成监听器名称
 func (l *LoadBalancer) generateListenName(vip string, port int32) string {
 	// 移除VIP中的点号，避免名称中出现特殊字符
-	nameBase := fmt.Sprintf("勿删-%s-%v", strings.ReplaceAll(vip, ".", ""), port)
+	nameBase := fmt.Sprintf("eks-lb-%s-%v", strings.ReplaceAll(vip, ".", ""), port)
 
 	// 确保名称不超过25个字符的限制
 	if len(nameBase) > 25 {
@@ -647,10 +782,9 @@ func (l *LoadBalancer) updateSlbListeners(slbId string, listeners []lb.VpcSlbUpd
 	return nil
 }
 
-func (l *LoadBalancer) clearLbListen(ctx context.Context, slbInfo *lb.DescribeVpcSlbResponseSlbInfo) error {
-	_, err := l.extractVipFromResponse(slbInfo)
-	if err != nil {
-		klog.Warningf("%v skip clear", err)
+func (l *LoadBalancer) clearLbListen(ctx context.Context, service *v1.Service, slbInfo *lb.DescribeVpcSlbResponseSlbInfo) error {
+	if len(slbInfo.VipList) == 0 {
+		klog.Infof("No listeners to clear for SLB ID: %s, skip.", slbInfo.SlbId)
 		return nil
 	}
 
