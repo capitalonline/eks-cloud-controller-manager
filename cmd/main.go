@@ -76,12 +76,12 @@ func cloudInitializer(config *cloudcontrollerconfig.CompletedConfig) cloudprovid
 func initFuncConstructors() map[string]app.ControllerInitFuncConstructor {
 	defaultInitFuncConstructors := app.DefaultInitFuncConstructors
 
-	// 适配老版本的K8S
+	// 注册一个新的节点同步器
 	defaultInitFuncConstructors[controller.NodeControllerKey] = app.ControllerInitFuncConstructor{
 		InitContext: app.ControllerInitContext{
 			ClientName: "node-controller",
 		},
-		Constructor: controller.ControllerWrapper{}.StartNodeControllerWrapper,
+		Constructor: controller.NodeControllerWrapper{}.StartNodeControllerWrapper,
 	}
 	return defaultInitFuncConstructors
 

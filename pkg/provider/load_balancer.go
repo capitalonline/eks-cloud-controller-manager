@@ -589,6 +589,14 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 	// 获取调度算法
 	algorithm := l.getSchedulerAlgorithm(service)
 
+	var nodeInfo []string
+	for _, nodeData := range nodes {
+		nodeInfo = append(nodeInfo, nodeData.Name)
+	}
+
+	klog.Infof("update lb service listen, ns:%s, name:%s, externalTrafficPolicy:%v, target nodes:%s",
+		service.Namespace, service.Name, service.Spec.ExternalTrafficPolicy, strings.Join(nodeInfo, ","))
+
 	// 构建监听器列表
 	listeners, err := l.buildListeners(service, nodes, algorithm, vipList)
 	if err != nil {
