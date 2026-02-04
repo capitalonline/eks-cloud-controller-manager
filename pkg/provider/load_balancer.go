@@ -857,15 +857,15 @@ func (l *LoadBalancer) describeLbInstance(ctx context.Context, service *v1.Servi
 		request.SlbName = SlbName(service.Name, service.Namespace, string(service.UID))
 	}
 	response, err := api.DescribeVpcSlb(request)
+	if response != nil && response.Code == consts.ErrorSlbNotFound {
+		klog.Warningf("%v, id:%s, name:%s", SLBNotFound, request.SlbID, request.SlbName)
+		return nil, SLBNotFound
+	}
 	if err != nil {
-		return response, err
+		return nil, err
 	}
 	// 接口请求返回异常
-	if response.Code != consts.LbRequestSuccess {
-		if response.Code == consts.ErrorSlbNotFound {
-			klog.Warningf("%v, id:%s, name:%s", SLBNotFound, request.SlbID, request.SlbName)
-			return nil, SLBNotFound
-		}
+	if response != nil && response.Code != consts.LbRequestSuccess {
 		klog.Errorf("DescribeVpcSlb failed, msg: %s", response.Message)
 		return nil, errors.New(response.Message)
 	}
