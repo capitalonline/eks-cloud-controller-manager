@@ -876,7 +876,7 @@ func (l *LoadBalancer) describeTask(taskId string) error {
 	if taskId == "" {
 		return errors.New("taskId is empty")
 	}
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 200; i++ {
 		resp, err := api.DescribeTask(taskId)
 		if err != nil {
 			return err
