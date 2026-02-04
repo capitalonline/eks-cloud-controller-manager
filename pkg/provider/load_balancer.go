@@ -153,7 +153,7 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 	}
 
 	// 获取或创建SLB实例
-	slbInfo, err := l.getOrCreateSlb(ctx, service, nodes)
+	slbInfo, err := l.getOrCreateSlb(ctx, service)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get or create SLB: %w", err)
 	}
@@ -196,7 +196,7 @@ func (l *LoadBalancer) validateService(service *v1.Service) error {
 }
 
 // getOrCreateSlb 获取现有SLB或创建新的SLB
-func (l *LoadBalancer) getOrCreateSlb(ctx context.Context, service *v1.Service, nodes []*v1.Node) (*lb.DescribeVpcSlbResponseSlbInfo, error) {
+func (l *LoadBalancer) getOrCreateSlb(ctx context.Context, service *v1.Service) (*lb.DescribeVpcSlbResponseSlbInfo, error) {
 	// 查询现有SLB实例
 	describeResp, err := l.describeLbInstance(ctx, service)
 	if err != nil && !errors.Is(err, SLBNotFound) {
@@ -335,7 +335,7 @@ func (l *LoadBalancer) createStandardSlb(regionCode, azCode string, service *v1.
 
 	confType := lbConfMap[params.lbSpec]
 	if confType == "" {
-		return "", fmt.Errorf("not fount lb conf type '%s'", params.lbSpec)
+		return "", fmt.Errorf("not fount lb spec conf type '%s'", params.lbSpec)
 	}
 	req.ConfType = confType
 	response, err := api.StandardCreateSlb(req)
@@ -419,11 +419,8 @@ func (l *LoadBalancer) parseServiceParams(service *v1.Service) (*serviceParams, 
 	}
 
 	// 验证参数范围
-	if lbType <= 0 {
-		return nil, errors.New("lb type must be greater than 0")
-	}
-	if _, exists := lbSpecMap[lbSpec]; !exists {
-		return nil, fmt.Errorf("unsupported lb spec: %s", lbSpec)
+	if lbType <= 0 || lbBandwidth <= 0 {
+		return nil, errors.New("lb annotation error")
 	}
 
 	return &serviceParams{
@@ -496,7 +493,7 @@ func (l *LoadBalancer) getBillingSchemeId(azCode, lbSpec string) (string, error)
 
 	expectedSpecName, exists := lbSpecMap[lbSpec]
 	if !exists {
-		return "", fmt.Errorf("unknown lb spec: %s", lbSpec)
+		return "", fmt.Errorf("not fount lb spec: %s", lbSpec)
 	}
 
 	for _, schema := range lsbSchema.Data {
