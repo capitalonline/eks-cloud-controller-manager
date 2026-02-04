@@ -93,7 +93,7 @@ func (sc *EndpointsController) Run(ctx context.Context) {
 		return
 	}
 
-	klog.Info("ServiceController Informer Running")
+	klog.Info("EndpointsController Informer Running")
 	<-ctx.Done()
 	return
 }
