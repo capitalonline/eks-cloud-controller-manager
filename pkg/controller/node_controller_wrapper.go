@@ -16,8 +16,10 @@ const (
 	NodeControllerKey = "label-taint"
 )
 
-type NodeControllerWrapper struct {
-	//Options options.TaggingControllerOptions
+type NodeControllerWrapper struct{}
+
+func NewNodeControllerWrapper() *NodeControllerWrapper {
+	return &NodeControllerWrapper{}
 }
 
 func (c *NodeControllerWrapper) StartNodeControllerWrapper(initContext app.ControllerInitContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface) app.InitFunc {

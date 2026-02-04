@@ -114,7 +114,7 @@ type LoadBalancer struct {
 // GetLoadBalancer 查询lb
 func (l *LoadBalancer) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
 	response, err := l.describeLbInstance(ctx, service)
-	if err != nil {
+	if err != nil || response == nil {
 		// k8s在删除节点之后会查一遍slb，确认是否被删除
 		if errors.Is(err, SLBNotFound) {
 			return nil, false, nil
@@ -139,7 +139,7 @@ func (l *LoadBalancer) GetLoadBalancer(ctx context.Context, clusterName string, 
 // GetLoadBalancerName 获取lb名称
 func (l *LoadBalancer) GetLoadBalancerName(ctx context.Context, clusterName string, service *v1.Service) string {
 	response, err := l.describeLbInstance(ctx, service)
-	if err != nil {
+	if err != nil || response == nil {
 		return ""
 	}
 	return response.Data.SlbName
@@ -158,6 +158,13 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 		return nil, fmt.Errorf("failed to get or create SLB: %w", err)
 	}
 
+	if service.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeLocal {
+		nodes, err = l.makeLocalLbListen(ctx, service)
+		if err != nil {
+			return nil, fmt.Errorf("failed to make local lb listen: %w", err)
+		}
+	}
+
 	// 更新负载均衡监听器
 	if err = l.updateLbListen(ctx, service, nodes, slbInfo); err != nil {
 		return nil, fmt.Errorf("failed to update load balancer: %w", err)
@@ -169,15 +176,21 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 
 func (l *LoadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
 	resp, err := l.describeLbInstance(ctx, service)
-	if err != nil {
+	if err != nil || resp == nil {
 		return fmt.Errorf("UpdateLoadBalancer failed, describe SLB error: %w", err)
+	}
+	if service.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeLocal {
+		nodes, err = l.makeLocalLbListen(ctx, service)
+		if err != nil {
+			return fmt.Errorf("failed to make local lb listen: %w", err)
+		}
 	}
 	return l.updateLbListen(ctx, service, nodes, &resp.Data)
 }
 
 func (l *LoadBalancer) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
 	response, err := l.describeLbInstance(ctx, service)
-	if err != nil {
+	if err != nil || response == nil {
 		if errors.Is(err, SLBNotFound) {
 			return nil
 		}
@@ -286,8 +299,8 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service) (*lb.
 	}
 
 	describeResp, err := l.describeLbInstance(ctx, service)
-	if err != nil {
-		return nil, err
+	if err != nil || describeResp == nil {
+		return nil, fmt.Errorf("failed to describe SLB: %w", err)
 	}
 
 	return &describeResp.Data, nil
@@ -347,6 +360,38 @@ func (l *LoadBalancer) createStandardSlb(regionCode, azCode string, service *v1.
 		return "", fmt.Errorf("create standard lb failed, code: %s, message: %s", response.Code, response.Message)
 	}
 	return response.TaskId, nil
+}
+
+func (l *LoadBalancer) makeLocalLbListen(ctx context.Context, service *v1.Service) ([]*v1.Node, error) {
+	// 1. 查询 service 对应的 Endpoints
+	endpoints, err := l.clientSet.CoreV1().Endpoints(service.Namespace).Get(ctx, service.Name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get endpoints for service %s/%s: %w", service.Namespace, service.Name, err)
+	}
+
+	// 2. 提取 Endpoints 中的 subsets 信息
+	var nodeNames []string
+	for _, subset := range endpoints.Subsets {
+		for _, address := range subset.Addresses {
+			if address.NodeName != nil {
+				nodeNames = append(nodeNames, *address.NodeName)
+			}
+		}
+	}
+
+	// 3. 根据节点名称查询对应的 v1.Node 对象
+	var nodes []*v1.Node
+	for _, nodeName := range nodeNames {
+		node, e := l.clientSet.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+		if e != nil {
+			klog.Warningf("make local Lb listen, failed to get ep node %s: %v", nodeName, err)
+			continue
+		}
+		nodes = append(nodes, node)
+	}
+
+	// 4. 返回所有节点信息
+	return nodes, nil
 }
 
 // 解析服务参数
@@ -869,7 +914,7 @@ func (l *LoadBalancer) describeLbInstance(ctx context.Context, service *v1.Servi
 		klog.Errorf("DescribeVpcSlb failed, msg: %s", response.Message)
 		return nil, errors.New(response.Message)
 	}
-	return response, err
+	return response, nil
 }
 
 func (l *LoadBalancer) describeTask(taskId string) error {
