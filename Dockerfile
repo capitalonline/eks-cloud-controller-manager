@@ -1,28 +1,29 @@
-FROM golang:1.20 as build
-RUN mkdir /app
-RUN mkdir /app/bin
-COPY . /app/
-RUN go env -w GO111MODULE=on
-RUN go env -w GOPROXY=https://goproxy.cn,direct
-RUN go env
+# 构建阶段
+FROM golang:1.21 as build
 
-ARG bin_file
-
+# 创建工作目录
 WORKDIR /app
-RUN go mod tidy
-RUN CGO_ENABLED=0 GOARCH="amd64" GOOS="linux" go build -ldflags " -s -w" -o bin/${bin_file}  ./cmd/${bin_file}.go
 
+# 复制源代码
+COPY . .
 
-FROM alpine:3.16 as run
+# 设置 Go 模块和代理
+RUN go env -w GO111MODULE=on \
+    && go env -w GOPROXY=https://goproxy.cn,direct
 
-ARG bin_file
+# 下载依赖并编译二进制文件
+RUN go mod tidy \
+    && CGO_ENABLED=0 GOARCH="amd64" GOOS="linux" go build -ldflags "-s -w" -o bin/eks-cloud-controller-manager ./cmd/main.go
 
-ENV TO_BIN_FILE ${bin_file}
+# 运行阶段
+FROM alpine:3.14
 
-COPY --from=build /app/bin/${bin_file} /app/${bin_file}
+# 复制构建好的二进制文件
+COPY --from=build /app/bin/eks-cloud-controller-manager /app/eks-cloud-controller-manager
 
-WORKDIR /app/
+# 设置工作目录权限
+WORKDIR /app
+RUN chmod +x /app/eks-cloud-controller-manager
 
-RUN chmod -R 777 /app/
-
-ENTRYPOINT /app/${TO_BIN_FILE} --cloud-provider=cdscloud --leader-elect=false --webhook-secure-port=0
+# 设置入口命令
+ENTRYPOINT ["/app/eks-cloud-controller-manager", "--cloud-provider=cdscloud", "--leader-elect=false", "--webhook-secure-port=0"]
