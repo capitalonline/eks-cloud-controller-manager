@@ -12,8 +12,8 @@ RUN go env -w GO111MODULE=on \
     && go env -w GOPROXY=https://goproxy.cn,direct
 
 # 下载依赖并编译二进制文件
-RUN go mod tidy \
-    && CGO_ENABLED=0 GOARCH="amd64" GOOS="linux" go build -ldflags "-s -w" -o bin/eks-cloud-controller-manager ./cmd/main.go
+RUN go mod tidy
+RUN CGO_ENABLED=0 GOARCH="amd64" GOOS="linux" go build -ldflags "-s -w" -o bin/eks-cloud-controller-manager ./cmd/main.go
 
 # 运行阶段
 FROM alpine:3.14

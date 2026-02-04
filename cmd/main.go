@@ -75,13 +75,13 @@ func cloudInitializer(config *cloudcontrollerconfig.CompletedConfig) cloudprovid
 
 func initFuncConstructors() map[string]app.ControllerInitFuncConstructor {
 	defaultInitFuncConstructors := app.DefaultInitFuncConstructors
-
+	nodeControllerWrapper := new(controller.NodeControllerWrapper)
 	// 注册一个新的节点同步器
 	defaultInitFuncConstructors[controller.NodeControllerKey] = app.ControllerInitFuncConstructor{
 		InitContext: app.ControllerInitContext{
-			ClientName: "node-controller",
+			ClientName: controller.NodeControllerClientName,
 		},
-		Constructor: controller.NodeControllerWrapper{}.StartNodeControllerWrapper,
+		Constructor: nodeControllerWrapper.StartNodeControllerWrapper,
 	}
 	return defaultInitFuncConstructors
 
