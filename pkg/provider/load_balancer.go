@@ -346,6 +346,10 @@ func (l *LoadBalancer) createStandardSlb(regionCode, azCode string, service *v1.
 	req.VpcId = consts.VpcID
 	req.NetType = LbNetTypeWanLan
 
+	if params.lbSpec == "" {
+		return "", fmt.Errorf("missing required annotation: %s", AnnotationLbSpec)
+	}
+
 	confType := lbConfMap[params.lbSpec]
 	if confType == "" {
 		return "", fmt.Errorf("not fount lb spec conf type '%s'", params.lbSpec)
@@ -423,9 +427,6 @@ func (l *LoadBalancer) parseServiceParams(service *v1.Service) (*serviceParams, 
 	}
 
 	lbSpec := service.Annotations[AnnotationLbSpec]
-	if lbSpec == "" {
-		return nil, fmt.Errorf("missing required annotation: %s", AnnotationLbSpec)
-	}
 
 	// 带宽计费方式
 	billingMethod := service.Annotations[AnnotationLbBillingMethod]
@@ -534,6 +535,10 @@ func (l *LoadBalancer) getBillingSchemeId(azCode, lbSpec string) (string, error)
 	lsbSchema, err := api.VpcSlbBillingScheme(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to get billing scheme: %w", err)
+	}
+
+	if lbSpec == "" {
+		return "", fmt.Errorf("missing required annotation: %s", AnnotationLbSpec)
 	}
 
 	expectedSpecName, exists := lbSpecMap[lbSpec]
