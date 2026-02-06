@@ -653,8 +653,86 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 		return fmt.Errorf("failed to build listeners: %w", err)
 	}
 
+	if l.checkUpdateConforming(vipList, listeners) {
+		for _, listener := range listeners {
+			klog.Infof("ip %s listeners %s are conforming, skip update", listener.ListenIp, lb.RsListString(listener.RsList))
+		}
+		return nil
+
+	}
+
 	// 更新负载均衡监听器
 	return l.updateSlbListeners(slbInfo.SlbId, listeners)
+}
+
+func (l *LoadBalancer) checkUpdateConforming(vipList []*lb.DescribeVpcSlbResponseVipInfo, needChangeListeners []lb.VpcSlbUpdateListenRequestListen) (conforming bool) {
+	conforming = true
+	var needChangeListenersMap = make(map[string]lb.VpcSlbUpdateListenRequestListen)
+	for _, listener := range needChangeListeners {
+		needChangeListenersMap[listener.ListenIp] = listener
+	}
+
+	// 理论上不存在vipList数量少于needChangeListeners的可能性，但为了代码健壮性，此处做判断
+	if len(vipList) < len(needChangeListeners) {
+		klog.Warningf("vipList length is less than needChangeListeners, vipList:%d, needChangeListeners:%d", len(vipList), len(needChangeListeners))
+		conforming = false
+		return conforming
+	}
+
+	for _, vipInfo := range vipList {
+		listener, ok := needChangeListenersMap[vipInfo.Vip]
+		if !ok {
+			continue
+		}
+		conforming = l.checkListenerConforming(vipInfo.ListenList, listener)
+		if !conforming {
+			break
+		}
+	}
+	return
+}
+
+func (l *LoadBalancer) checkListenerConforming(vipListenList []lb.ListenData, needChangeListener lb.VpcSlbUpdateListenRequestListen) (conforming bool) {
+	conforming = false
+	var targetListen *lb.ListenData
+	for _, vipListen := range vipListenList {
+		listenPort := vipListen.GetListenPort()
+		if listenPort == 0 {
+			klog.Warning("failed to get VIP listen port from SLB details")
+			continue
+		}
+		if listenPort == needChangeListener.ListenPort {
+			targetListen = &vipListen
+			break
+		}
+	}
+	if targetListen == nil {
+		return
+	}
+	// 首先比较长度
+	if len(targetListen.RsList) != len(needChangeListener.RsList) {
+		return
+	}
+
+	// 创建map方便比较
+	actualRsMap := make(map[string]lb.DescribeVpcSlbRsInfo)
+	for _, rs := range targetListen.RsList {
+		actualRsMap[rs.RsIp] = rs
+	}
+
+	// 遍历期望的RS列表，检查是否都存在于实际RS列表中
+	for _, needChangeRs := range needChangeListener.RsList {
+		rs, exists := actualRsMap[needChangeRs.RsLanIp]
+		if !exists {
+			return
+		}
+		if rs.RsPort != fmt.Sprintf("%d", needChangeRs.RsPort) || rs.RsIp != needChangeRs.RsLanIp {
+			return
+		}
+
+	}
+	conforming = true
+	return
 }
 
 // extractVipFromResponse 从响应中提取VIP地址

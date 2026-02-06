@@ -2,6 +2,8 @@ package lb
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 
 	cdshttp "github.com/capitalonline/eks-cloud-controller-manager/pkg/utils/http"
 )
@@ -153,20 +155,39 @@ type DescribeVpcSlbResponseSlbInfo struct {
 }
 
 type DescribeVpcSlbResponseVipInfo struct {
-	ListenList interface{} `json:"ListenList"`
-	Vip        string      `json:"Vip"`
-	VipId      string      `json:"VipId"`
-	VipType    string      `json:"VipType"`
+	ListenList []ListenData `json:"ListenList"`
+	Vip        string       `json:"Vip"`
+	VipId      string       `json:"VipId"`
+	VipType    string       `json:"VipType"`
+}
+type ListenData struct {
+	ListenId       string                 `json:"ListenId"`
+	ListenPort     interface{}            `json:"ListenPort"`
+	ListenProtocol string                 `json:"ListenProtocol"`
+	RsList         []DescribeVpcSlbRsInfo `json:"RsList"`
+	Scheduler      string                 `json:"Scheduler"`
+}
+
+func (r *ListenData) GetListenPort() int {
+	// SLB OPEN-API ListenPort存在两个版本不一致的数据类型，需适配断言处理
+	switch r.ListenPort.(type) {
+	case int:
+		return r.ListenPort.(int)
+	case int64:
+		return int(r.ListenPort.(int64))
+	default:
+		return 0
+	}
 }
 
 type DescribeVpcSlbResponseListenInfo struct {
-	ListenId       string                         `json:"ListenId"`
-	ListenPort     string                         `json:"ListenPort"`
-	ListenProtocol string                         `json:"ListenProtocol"`
-	RsList         []DescribeVpcSlbResponseRsInfo `json:"RsList"`
+	ListenId       string                 `json:"ListenId"`
+	ListenPort     string                 `json:"ListenPort"`
+	ListenProtocol string                 `json:"ListenProtocol"`
+	RsList         []DescribeVpcSlbRsInfo `json:"RsList"`
 }
 
-type DescribeVpcSlbResponseRsInfo struct {
+type DescribeVpcSlbRsInfo struct {
 	RsIp   string `json:"RsIp"`
 	RsPort string `json:"RsPort"`
 }
@@ -197,6 +218,14 @@ type VpcSlbUpdateListenRequestListen struct {
 	Timeout        int                                  `json:"Timeout"`
 	RsList         []VpcSlbUpdateListenRequestRs        `json:"RsList"`
 	HealthCheck    VpcSlbUpdateListenRequestHealthCheck `json:"HealthCheck"`
+}
+
+func RsListString([]VpcSlbUpdateListenRequestRs) string {
+	var l []string
+	for _, v := range []VpcSlbUpdateListenRequestRs{} {
+		l = append(l, fmt.Sprintf("%v:%v", v.RsLanIp, v.RsPort))
+	}
+	return strings.Join(l, ",")
 }
 
 type VpcSlbUpdateListenRequestHealthCheck struct {
