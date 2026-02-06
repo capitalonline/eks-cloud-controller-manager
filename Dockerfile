@@ -1,5 +1,5 @@
 # 构建阶段
-FROM golang:1.21 as build
+FROM golang:1.20 as build
 
 # 创建工作目录
 WORKDIR /app
@@ -27,3 +27,5 @@ RUN chmod +x /app/eks-cloud-controller-manager
 
 # 设置入口命令
 ENTRYPOINT ["/app/eks-cloud-controller-manager", "--cloud-provider=cdscloud", "--leader-elect=false", "--webhook-secure-port=0"]
+
+# docker build -t eks-cloud-controller-manager:v0.0.0 .
