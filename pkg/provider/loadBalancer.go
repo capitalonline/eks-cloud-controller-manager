@@ -72,6 +72,7 @@ const (
 	PublicNetwork  = "public"
 	PrivateNetwork = "private"
 	EIP            = "eip"
+	LanVip         = "lan_vip"
 
 	LbAlgorithmRr   = "rr"
 	LbAlgorithmWrr  = "wrr"
@@ -761,7 +762,7 @@ func (l *LoadBalancer) filterSelectedVips(vipList []lb.DescribeVpcSlbResponseVip
 			continue
 		}
 		// 匹配私网IP (private)
-		if vipInfo.VipType == PrivateNetwork && params.lbVip != "" && vipInfo.Vip == params.lbVip {
+		if vipInfo.VipType == LanVip && params.lbVip != "" && vipInfo.Vip == params.lbVip {
 			selectedVips = append(selectedVips, vipInfo)
 		}
 	}
