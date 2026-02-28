@@ -780,7 +780,7 @@ func (l *LoadBalancer) filterVipsByNetworkType(vipList []lb.DescribeVpcSlbRespon
 			if vipInfo.VipType == EIP && ok {
 				public = &vipInfo
 			}
-			if vipInfo.VipType == PrivateNetwork && ok {
+			if vipInfo.VipType == LanVip && ok {
 				private = &vipInfo
 			}
 		}
@@ -789,7 +789,7 @@ func (l *LoadBalancer) filterVipsByNetworkType(vipList []lb.DescribeVpcSlbRespon
 			if vipInfo.VipType == EIP {
 				public = &vipInfo
 			}
-			if vipInfo.VipType == PrivateNetwork {
+			if vipInfo.VipType == LanVip {
 				private = &vipInfo
 			}
 		}
