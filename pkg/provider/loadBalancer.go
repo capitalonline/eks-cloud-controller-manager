@@ -645,6 +645,10 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 		nodeInfo = append(nodeInfo, nodeData.Name)
 	}
 
+	for _, v := range vipList {
+		klog.Infof("vip debug %s", v.Vip)
+	}
+
 	klog.Infof("update lb service listen, ns:%s, name:%s, externalTrafficPolicy:%v, target nodes:%s",
 		service.Namespace, service.Name, service.Spec.ExternalTrafficPolicy, strings.Join(nodeInfo, ","))
 
