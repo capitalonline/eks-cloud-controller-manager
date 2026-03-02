@@ -673,7 +673,6 @@ func (l *LoadBalancer) checkUpdateConforming(vipList []*lb.DescribeVpcSlbRespons
 		needChangeListenersMap[listener.ListenIp] = listener
 	}
 
-	// 理论上不存在vipList数量少于needChangeListeners的可能性，但为了代码健壮性，此处做判断
 	if len(vipList) < len(needChangeListeners) {
 		klog.Warningf("vipList length is less than needChangeListeners, vipList:%d, needChangeListeners:%d", len(vipList), len(needChangeListeners))
 		conforming = false
@@ -774,24 +773,23 @@ func (l *LoadBalancer) filterSelectedVips(vipList []lb.DescribeVpcSlbResponseVip
 func (l *LoadBalancer) filterVipsByNetworkType(vipList []lb.DescribeVpcSlbResponseVipInfo, params *serviceParams) ([]*lb.DescribeVpcSlbResponseVipInfo, error) {
 	var public, private *lb.DescribeVpcSlbResponseVipInfo
 
-	if len(params.ingressStatusIpMap) > 0 {
-		for _, vipInfo := range vipList {
+	for _, vipInfo := range vipList {
+		if len(params.ingressStatusIpMap) > 0 {
 			_, ok := params.ingressStatusIpMap[vipInfo.Vip]
-			if vipInfo.VipType == EIP && ok {
-				public = &vipInfo
-			}
-			if vipInfo.VipType == LanVip && ok {
-				private = &vipInfo
+			if !ok {
+				continue
 			}
 		}
-	} else {
-		for _, vipInfo := range vipList {
-			if vipInfo.VipType == EIP {
-				public = &vipInfo
-			}
-			if vipInfo.VipType == LanVip {
-				private = &vipInfo
-			}
+
+		if vipInfo.VipType == EIP && public == nil {
+			public = &vipInfo
+		}
+		if vipInfo.VipType == LanVip && private == nil {
+			private = &vipInfo
+		}
+
+		if public != nil && private != nil {
+			break
 		}
 	}
 
