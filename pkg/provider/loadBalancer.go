@@ -945,7 +945,7 @@ func (l *LoadBalancer) updateSlbListeners(slbId string, listeners []lb.VpcSlbUpd
 	request.ListenList = listeners
 	request.SlbId = slbId
 	request.Platform = EKS
-	request.OperatorType = UpdateListenFull // 使用全量更新，确保状态一致
+	request.OperatorType = UpdateListenExact
 
 	// 执行API调用
 	response, err := api.VpcSlbUpdateListen(request)
