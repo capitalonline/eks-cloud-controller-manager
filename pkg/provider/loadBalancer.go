@@ -375,18 +375,18 @@ func (l *LoadBalancer) makeLocalLbListen(ctx context.Context, service *v1.Servic
 	}
 
 	// 2. 提取 Endpoints 中的 subsets 信息
-	var nodeNames []string
+	var nodeNames = make(map[string]bool)
 	for _, subset := range endpoints.Subsets {
 		for _, address := range subset.Addresses {
 			if address.NodeName != nil {
-				nodeNames = append(nodeNames, *address.NodeName)
+				nodeNames[*address.NodeName] = true
 			}
 		}
 	}
 
 	// 3. 根据节点名称查询对应的 v1.Node 对象
 	var nodes []*v1.Node
-	for _, nodeName := range nodeNames {
+	for nodeName, _ := range nodeNames {
 		node, e := l.clientSet.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 		if e != nil {
 			klog.Warningf("make local Lb listen, failed to get ep node %s: %v", nodeName, err)
@@ -645,10 +645,6 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 		nodeInfo = append(nodeInfo, nodeData.Name)
 	}
 
-	for _, v := range vipList {
-		klog.Infof("vip debug %s", v.Vip)
-	}
-
 	klog.Infof("update lb service listen, ns:%s, name:%s, externalTrafficPolicy:%v, target nodes:%s",
 		service.Namespace, service.Name, service.Spec.ExternalTrafficPolicy, strings.Join(nodeInfo, ","))
 
@@ -658,7 +654,7 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 		return fmt.Errorf("failed to build listeners: %w", err)
 	}
 
-	if l.checkUpdateConforming(vipList, listeners) {
+	if l.checkUpdateConforming(service, vipList, listeners) {
 		for _, listener := range listeners {
 			klog.Infof("ip %s listeners %s are conforming, skip update", listener.ListenIp, lb.RsListString(listener.RsList))
 		}
@@ -666,18 +662,23 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 
 	}
 
+	operatorType := UpdateListenExact
+	if params.selectSLB == "" {
+		operatorType = UpdateListenFull
+	}
+
 	// 更新负载均衡监听器
-	return l.updateSlbListeners(slbInfo.SlbId, listeners)
+	return l.updateSlbListeners(slbInfo.SlbId, operatorType, listeners)
 }
 
-func (l *LoadBalancer) checkUpdateConforming(vipList []*lb.DescribeVpcSlbResponseVipInfo, needChangeListeners []lb.VpcSlbUpdateListenRequestListen) (conforming bool) {
+func (l *LoadBalancer) checkUpdateConforming(service *v1.Service, vipList []*lb.DescribeVpcSlbResponseVipInfo, needChangeListeners []lb.VpcSlbUpdateListenRequestListen) (conforming bool) {
 	conforming = true
 	var needChangeListenersMap = make(map[string]lb.VpcSlbUpdateListenRequestListen)
 	for _, listener := range needChangeListeners {
 		needChangeListenersMap[listener.ListenIp] = listener
 	}
 
-	if len(vipList) < len(needChangeListeners) {
+	if len(vipList)*len(service.Spec.Ports) < len(needChangeListeners) {
 		klog.Warningf("vipList length is less than needChangeListeners, vipList:%d, needChangeListeners:%d", len(vipList), len(needChangeListeners))
 		conforming = false
 		return conforming
@@ -702,7 +703,7 @@ func (l *LoadBalancer) checkListenerConforming(vipListenList []lb.ListenData, ne
 	for _, vipListen := range vipListenList {
 		listenPort := vipListen.GetListenPort()
 		if listenPort == 0 {
-			klog.Warning("failed to get VIP listen port from SLB details")
+			klog.Warningf("failed to get VIP %s listen port from SLB details", needChangeListener.ListenIp)
 			continue
 		}
 		if listenPort == needChangeListener.ListenPort {
@@ -761,13 +762,11 @@ func (l *LoadBalancer) filterSelectedVips(vipList []lb.DescribeVpcSlbResponseVip
 	for _, vipInfo := range vipList {
 		// 匹配公网IP (eip)
 		if vipInfo.VipType == EIP && params.lbEip != "" && vipInfo.Vip == params.lbEip {
-			klog.Infof("select vip debug %s", vipInfo.Vip)
 			selectedVips = append(selectedVips, vipInfo)
 			continue
 		}
 		// 匹配私网IP (private)
 		if vipInfo.VipType == LanVip && params.lbVip != "" && vipInfo.Vip == params.lbVip {
-			klog.Infof("select vip debug %s", vipInfo.Vip)
 			selectedVips = append(selectedVips, vipInfo)
 		}
 	}
@@ -804,17 +803,19 @@ func (l *LoadBalancer) filterVipsByNetworkType(vipList []lb.DescribeVpcSlbRespon
 	switch params.lbNetworkType {
 	case AllNetwork:
 		if public != nil && private != nil {
-			klog.Infof("public vip debug %s, private vip debug %s", public.Vip, private.Vip)
+			klog.Infof("public vip  %s, private vip  %s", public.Vip, private.Vip)
 			return []*lb.DescribeVpcSlbResponseVipInfo{public, private}, nil
 		}
 
 	case PublicNetwork:
 		if public != nil {
+			klog.Infof("public vip  %s", public.Vip)
 			return []*lb.DescribeVpcSlbResponseVipInfo{public}, nil
 		}
 
 	case PrivateNetwork:
 		if private != nil {
+			klog.Infof("private vip  %s", private.Vip)
 			return []*lb.DescribeVpcSlbResponseVipInfo{private}, nil
 		}
 
@@ -940,7 +941,7 @@ func (l *LoadBalancer) getNodeInternalAddress(node *v1.Node) (string, error) {
 }
 
 // updateSlbListeners 更新负载均衡器的监听器
-func (l *LoadBalancer) updateSlbListeners(slbId string, listeners []lb.VpcSlbUpdateListenRequestListen) error {
+func (l *LoadBalancer) updateSlbListeners(slbId, operatorType string, listeners []lb.VpcSlbUpdateListenRequestListen) error {
 	// 如果没有监听器需要更新，直接返回
 	if len(listeners) == 0 {
 		klog.Infof("No listeners to update for SLB ID: %s", slbId)
@@ -952,7 +953,7 @@ func (l *LoadBalancer) updateSlbListeners(slbId string, listeners []lb.VpcSlbUpd
 	request.ListenList = listeners
 	request.SlbId = slbId
 	request.Platform = EKS
-	request.OperatorType = UpdateListenExact
+	request.OperatorType = operatorType
 
 	// 执行API调用
 	response, err := api.VpcSlbUpdateListen(request)
