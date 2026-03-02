@@ -761,11 +761,13 @@ func (l *LoadBalancer) filterSelectedVips(vipList []lb.DescribeVpcSlbResponseVip
 	for _, vipInfo := range vipList {
 		// 匹配公网IP (eip)
 		if vipInfo.VipType == EIP && params.lbEip != "" && vipInfo.Vip == params.lbEip {
+			klog.Infof("select vip debug %s", vipInfo.Vip)
 			selectedVips = append(selectedVips, vipInfo)
 			continue
 		}
 		// 匹配私网IP (private)
 		if vipInfo.VipType == LanVip && params.lbVip != "" && vipInfo.Vip == params.lbVip {
+			klog.Infof("select vip debug %s", vipInfo.Vip)
 			selectedVips = append(selectedVips, vipInfo)
 		}
 	}
@@ -777,7 +779,7 @@ func (l *LoadBalancer) filterSelectedVips(vipList []lb.DescribeVpcSlbResponseVip
 func (l *LoadBalancer) filterVipsByNetworkType(vipList []lb.DescribeVpcSlbResponseVipInfo, params *serviceParams) ([]*lb.DescribeVpcSlbResponseVipInfo, error) {
 	var public, private *lb.DescribeVpcSlbResponseVipInfo
 
-	for _, vipInfo := range vipList {
+	for i, vipInfo := range vipList {
 		if len(params.ingressStatusIpMap) > 0 {
 			_, ok := params.ingressStatusIpMap[vipInfo.Vip]
 			if !ok {
@@ -786,10 +788,12 @@ func (l *LoadBalancer) filterVipsByNetworkType(vipList []lb.DescribeVpcSlbRespon
 		}
 
 		if vipInfo.VipType == EIP && public == nil {
-			public = &vipInfo
+			public = &vipList[i]
+			continue
 		}
 		if vipInfo.VipType == LanVip && private == nil {
-			private = &vipInfo
+			private = &vipList[i]
+			continue
 		}
 
 		if public != nil && private != nil {
@@ -800,6 +804,7 @@ func (l *LoadBalancer) filterVipsByNetworkType(vipList []lb.DescribeVpcSlbRespon
 	switch params.lbNetworkType {
 	case AllNetwork:
 		if public != nil && private != nil {
+			klog.Infof("public vip debug %s, private vip debug %s", public.Vip, private.Vip)
 			return []*lb.DescribeVpcSlbResponseVipInfo{public, private}, nil
 		}
 
