@@ -166,6 +166,10 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 		}
 	}
 
+	if len(nodes) == 0 {
+		return nil, errors.New("no nodes found for service, retrying")
+	}
+
 	// 更新负载均衡监听器
 	if err = l.updateLbListen(ctx, service, nodes, slbInfo); err != nil {
 		return nil, fmt.Errorf("failed to update load balancer: %w", err)
@@ -656,7 +660,8 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 
 	if l.checkUpdateConforming(service, vipList, listeners) {
 		for _, listener := range listeners {
-			klog.Infof("ip %s listeners %s are conforming, skip update", listener.ListenIp, lb.RsListString(listener.RsList))
+			klog.Infof("ip %s port %v listeners %s are conforming, skip update",
+				listener.ListenIp, listener.ListenPort, listener.RsListString())
 		}
 		return nil
 
@@ -702,11 +707,11 @@ func (l *LoadBalancer) checkListenerConforming(vipListenList []lb.ListenData, ne
 	var targetListen *lb.ListenData
 	for _, vipListen := range vipListenList {
 		listenPort := vipListen.GetListenPort()
-		if listenPort == 0 {
-			klog.Warningf("failed to get VIP %s listen port from SLB details", needChangeListener.ListenIp)
+		if listenPort == 0 && vipListen.ListenName == "" {
+			klog.Warningf("failed to get VIP %s listen port or name from SLB details", needChangeListener.ListenIp)
 			continue
 		}
-		if listenPort == needChangeListener.ListenPort {
+		if listenPort == needChangeListener.ListenPort && vipListen.ListenName == needChangeListener.ListenName {
 			targetListen = &vipListen
 			break
 		}
@@ -865,7 +870,7 @@ func (l *LoadBalancer) buildListener(port *v1.ServicePort, nodes []*v1.Node, pro
 	// 构建真实服务器列表
 	rsList, err := l.buildRealServerList(nodes, port)
 	if err != nil {
-		return lb.VpcSlbUpdateListenRequestListen{}, fmt.Errorf("failed to build real server list: %w", err)
+		return lb.VpcSlbUpdateListenRequestListen{}, err
 	}
 
 	// 创建监听器对象
@@ -909,9 +914,7 @@ func (l *LoadBalancer) buildRealServerList(nodes []*v1.Node, port *v1.ServicePor
 	for _, node := range nodes {
 		address, err := l.getNodeInternalAddress(node)
 		if err != nil {
-			// 记录警告但继续处理其他节点
-			klog.Warningf("Node %s does not have internal IP address: %v", node.Name, err)
-			continue
+			return nil, err
 		}
 
 		realServer := lb.VpcSlbUpdateListenRequestRs{
@@ -931,6 +934,9 @@ func (l *LoadBalancer) buildRealServerList(nodes []*v1.Node, port *v1.ServicePor
 
 // getNodeInternalAddress 获取节点的内部IP地址
 func (l *LoadBalancer) getNodeInternalAddress(node *v1.Node) (string, error) {
+	if node.Spec.ProviderID == "" {
+		return "", fmt.Errorf("node %s does not have a provider ID", node.Name)
+	}
 	for _, addr := range node.Status.Addresses {
 		if addr.Type == IpTypeInternal && addr.Address != "" {
 			return addr.Address, nil

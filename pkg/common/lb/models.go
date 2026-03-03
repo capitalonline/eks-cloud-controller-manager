@@ -162,6 +162,7 @@ type DescribeVpcSlbResponseVipInfo struct {
 }
 type ListenData struct {
 	ListenId       string                 `json:"ListenId"`
+	ListenName     string                 `json:"ListenName"`
 	ListenPort     interface{}            `json:"ListenPort"`
 	ListenProtocol string                 `json:"ListenProtocol"`
 	RsList         []DescribeVpcSlbRsInfo `json:"RsList"`
@@ -190,6 +191,7 @@ type DescribeVpcSlbResponseListenInfo struct {
 type DescribeVpcSlbRsInfo struct {
 	RsIp   string `json:"RsIp"`
 	RsPort string `json:"RsPort"`
+	RsType string `json:"RsType"`
 }
 
 func (r *DescribeVpcSlbResponse) ToJsonString() string {
@@ -220,9 +222,9 @@ type VpcSlbUpdateListenRequestListen struct {
 	HealthCheck    VpcSlbUpdateListenRequestHealthCheck `json:"HealthCheck"`
 }
 
-func RsListString([]VpcSlbUpdateListenRequestRs) string {
+func (vl *VpcSlbUpdateListenRequestListen) RsListString() string {
 	var l []string
-	for _, v := range []VpcSlbUpdateListenRequestRs{} {
+	for _, v := range vl.RsList {
 		l = append(l, fmt.Sprintf("%v:%v", v.RsLanIp, v.RsPort))
 	}
 	return strings.Join(l, ",")
