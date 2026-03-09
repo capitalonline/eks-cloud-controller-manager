@@ -87,9 +87,10 @@ var lbSpecMap = map[string]string{
 }
 
 var lbConfMap = map[string]string{
-	LBSpecHigh:    "slb.v1.small",
-	LBSpecSuper:   "slb.v1.medium",
-	LBSpecExtreme: "slb.v1.large",
+	LBSpecStandard: "slb.v1.mini",
+	LBSpecHigh:     "slb.v1.small",
+	LBSpecSuper:    "slb.v1.medium",
+	LBSpecExtreme:  "slb.v1.large",
 }
 
 var SLBNotFound error = errors.New("slb not found")
