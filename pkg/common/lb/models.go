@@ -464,3 +464,37 @@ func (r *BandwidthBillingSchemeResponse) ToJsonString() string {
 func (r *BandwidthBillingSchemeResponse) FromJsonString(s string) error {
 	return json.Unmarshal([]byte(s), &r)
 }
+
+type DeleteVpcSLBListenRequest struct {
+	*cdshttp.BaseRequest
+	UserId     string   `json:"-"`
+	CustomerId string   `json:"-"`
+	ListenIds  []string `json:"ListenIds"`
+}
+
+func (r *DeleteVpcSLBListenRequest) ToJsonString() string {
+	b, _ := json.Marshal(r)
+	return string(b)
+}
+
+func (r *DeleteVpcSLBListenRequest) FromJsonString(s string) error {
+	return json.Unmarshal([]byte(s), &r)
+}
+
+type DeleteVpcSLBListenResponse struct {
+	*cdshttp.BaseResponse
+	Data      interface{} `json:"Data"`
+	Code      string      `json:"Code"`
+	Message   string      `json:"Message"`
+	RequestId string      `json:"RequestId"`
+	TaskId    string      `json:"TaskId"`
+}
+
+func (r *DeleteVpcSLBListenResponse) ToJsonString() string {
+	b, _ := json.Marshal(r)
+	return string(b)
+}
+
+func (r *DeleteVpcSLBListenResponse) FromJsonString(s string) error {
+	return json.Unmarshal([]byte(s), &r)
+}

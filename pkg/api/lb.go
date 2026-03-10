@@ -134,3 +134,16 @@ func VpcBandwidthBillingScheme(request *lb.BandwidthBillingSchemeRequest) (*lb.B
 	}
 	return response, err
 }
+
+func DeleteVpcSLBListenRequest(request *lb.DeleteVpcSLBListenRequest) (*lb.DeleteVpcSLBListenResponse, error) {
+	credential := utils.NewCredential(consts.AccessKeyID, consts.AccessKeySecret)
+	cpf := profile.NewClientProfile()
+	cpf.HttpProfile.ReqMethod = http.MethodPost
+	cpf.HttpProfile.Endpoint = consts.LbApiHost
+	client, _ := lb.NewClient(credential, consts.Region, cpf)
+	response, err := client.DeleteVpcSLBListen(request)
+	if err != nil {
+		return nil, err
+	}
+	return response, err
+}

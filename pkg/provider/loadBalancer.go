@@ -32,9 +32,10 @@ const (
 	AnnotationLbSpec      = "service.beta.kubernetes.io/cds-load-balancer-specification"
 	AnnotationLbBandwidth = "service.beta.kubernetes.io/cds-load-balancer-bandwidth"
 
-	AnnotationLbAlgorithm     = "service.beta.kubernetes.io/cds-load-balancer-algorithm"
-	AnnotationLbSubjectId     = "service.beta.kubernetes.io/cds-load-balancer-subject-id"
-	AnnotationLbBillingMethod = "service.beta.kubernetes.io/cds-load-balancer-billingmethod"
+	AnnotationLbAlgorithm           = "service.beta.kubernetes.io/cds-load-balancer-algorithm"
+	AnnotationLbSubjectId           = "service.beta.kubernetes.io/cds-load-balancer-subject-id"
+	AnnotationLbBillingMethod       = "service.beta.kubernetes.io/cds-load-balancer-billingmethod"
+	AnnotationLbBillingMethodConfId = "service.beta.kubernetes.io/cds-load-balancer-billingmethod-conf-id"
 
 	LabelNodeRegionCode = "topology.kubernetes.io/region"
 	LabelNodeAzCode     = "node.kubernetes.io/node.az-code"
@@ -97,16 +98,17 @@ var SLBNotFound error = errors.New("slb not found")
 
 // 服务参数结构体
 type serviceParams struct {
-	subjectId          int
-	lbType             int64
-	lbSpec             string
-	billingMethod      string
-	lbBandwidth        int64
-	lbEip              string
-	lbVip              string
-	selectSLB          string
-	lbNetworkType      string
-	ingressStatusIpMap map[string]bool
+	subjectId           int
+	lbType              int64
+	lbSpec              string
+	billingMethod       string
+	billingMethodConfId int
+	lbBandwidth         int64
+	lbEip               string
+	lbVip               string
+	selectSLB           string
+	lbNetworkType       string
+	ingressStatusIpMap  map[string]bool
 }
 
 type LoadBalancer struct {
@@ -320,7 +322,7 @@ func (l *LoadBalancer) createPackageSlb(azCode string, service *v1.Service, para
 	}
 
 	// 获取带宽计费方案
-	bandwidthBillingSchemeId, err := l.getBandwidthBillingSchemeId(azCode, params.billingMethod)
+	bandwidthBillingSchemeId, err := l.getBandwidthBillingSchemeId(azCode, params.billingMethod, params.billingMethodConfId)
 	if err != nil {
 		return "", fmt.Errorf("failed to get bandwidth billing scheme: %w", err)
 	}
@@ -442,6 +444,15 @@ func (l *LoadBalancer) parseServiceParams(service *v1.Service) (*serviceParams, 
 		billingMethod = DefaultBillingType
 	}
 
+	billingMethodConfId := service.Annotations[AnnotationLbBillingMethodConfId]
+	confId := 0
+	confId64, err := strconv.ParseInt(billingMethodConfId, 10, 64)
+	if err != nil {
+		klog.Warningf("get billing method conf id: %s error", billingMethodConfId)
+	} else {
+		confId = int(confId64)
+	}
+
 	// 固定带宽
 	lbBandwidthStr := service.Annotations[AnnotationLbBandwidth]
 	if lbBandwidthStr == "" {
@@ -476,16 +487,17 @@ func (l *LoadBalancer) parseServiceParams(service *v1.Service) (*serviceParams, 
 	}
 
 	return &serviceParams{
-		subjectId:          subjectId,
-		lbType:             lbType,
-		lbSpec:             lbSpec,
-		billingMethod:      billingMethod,
-		lbBandwidth:        lbBandwidth,
-		lbEip:              lbEipStr,
-		lbVip:              lbVipStr,
-		selectSLB:          selectSlb,
-		lbNetworkType:      networkType,
-		ingressStatusIpMap: m,
+		subjectId:           subjectId,
+		lbType:              lbType,
+		lbSpec:              lbSpec,
+		billingMethod:       billingMethod,
+		billingMethodConfId: confId,
+		lbBandwidth:         lbBandwidth,
+		lbEip:               lbEipStr,
+		lbVip:               lbVipStr,
+		selectSLB:           selectSlb,
+		lbNetworkType:       networkType,
+		ingressStatusIpMap:  m,
 	}, nil
 }
 
@@ -562,7 +574,7 @@ func (l *LoadBalancer) getBillingSchemeId(azCode, lbSpec string) (string, error)
 }
 
 // 获取带宽计费方案ID
-func (l *LoadBalancer) getBandwidthBillingSchemeId(azCode, billingMethod string) (string, error) {
+func (l *LoadBalancer) getBandwidthBillingSchemeId(azCode, billingMethod string, billingMethodConfId int) (string, error) {
 	req := lb.NewBandwidthBillingSchemeRequest()
 	req.AvailableZoneCode = azCode
 	req.VpcId = consts.VpcID
@@ -583,6 +595,9 @@ func (l *LoadBalancer) getBandwidthBillingSchemeId(azCode, billingMethod string)
 
 	// 查找指定计费类型
 	for _, bandwidth := range bandwidthResp.Data {
+		if billingMethodConfId != 0 && billingMethodConfId != bandwidth.ConfId {
+			continue
+		}
 		for _, bill := range bandwidth.BillingScheme {
 			if bill.BillingType == billingMethod {
 				return bill.BillingSchemeId, nil
@@ -898,7 +913,7 @@ func (l *LoadBalancer) buildListener(port *v1.ServicePort, nodes []*v1.Node, pro
 // generateListenName 生成监听器名称
 func (l *LoadBalancer) generateListenName(vip string, port int32) string {
 	// 移除VIP中的点号，避免名称中出现特殊字符
-	nameBase := fmt.Sprintf("eks-lb-%s-%v", strings.ReplaceAll(vip, ".", ""), port)
+	nameBase := fmt.Sprintf("eks-lb%s-%v", strings.ReplaceAll(vip, ".", ""), port)
 
 	// 确保名称不超过25个字符的限制
 	if len(nameBase) > 25 {
@@ -982,15 +997,35 @@ func (l *LoadBalancer) clearLbListen(ctx context.Context, service *v1.Service, s
 		klog.Infof("No listeners to clear for SLB ID: %s, skip.", slbInfo.SlbId)
 		return nil
 	}
+	var (
+		err              error
+		listenIds        []string
+		taskId           string
+		deleteListenResp *lb.DeleteVpcSLBListenResponse
+		clearResp        *lb.VpcSlbClearListenResponse
+	)
 
-	clearResp, err := api.VpcSlbClearListen(slbInfo.SlbId)
-	if err != nil {
-		if clearResp != nil && clearResp.Code == consts.ErrorSlbNotFound {
-			return nil
+	listenIds, err = l.getSelfListen(ctx, service, slbInfo)
+	if len(listenIds) != 0 {
+		req := lb.NewDeleteLbListenersRequest()
+		req.ListenIds = listenIds
+		deleteListenResp, err = api.DeleteVpcSLBListenRequest(req)
+		if err != nil {
+			return err
 		}
-		return err
+		taskId = deleteListenResp.TaskId
+	} else {
+		clearResp, err = api.VpcSlbClearListen(slbInfo.SlbId)
+		if err != nil {
+			if clearResp != nil && clearResp.Code == consts.ErrorSlbNotFound {
+				return nil
+			}
+			return err
+		}
+		taskId = clearResp.TaskId
 	}
-	return l.describeTask(clearResp.TaskId)
+
+	return l.describeTask(taskId)
 }
 
 func (l *LoadBalancer) describeLbInstance(ctx context.Context, service *v1.Service) (*lb.DescribeVpcSlbResponse, error) {
@@ -1014,6 +1049,41 @@ func (l *LoadBalancer) describeLbInstance(ctx context.Context, service *v1.Servi
 		return nil, errors.New(response.Message)
 	}
 	return response, nil
+}
+
+func (l *LoadBalancer) getSelfListen(ctx context.Context, service *v1.Service, slbInfo *lb.DescribeVpcSlbResponseSlbInfo) ([]string, error) {
+	var (
+		ipMap     map[string]bool
+		listenIds []string
+	)
+
+	if len(service.Status.LoadBalancer.Ingress) == 0 {
+		return nil, nil
+	}
+
+	for _, ingress := range service.Status.LoadBalancer.Ingress {
+		if ingress.IP == "" {
+			continue
+		}
+		ipMap[ingress.IP] = true
+	}
+
+	for _, v := range slbInfo.VipList {
+		_, ok := ipMap[v.Vip]
+		if !ok {
+			continue
+		}
+		headName := "eks-lb" + strings.ReplaceAll(v.Vip, ".", "")
+		for _, listen := range v.ListenList {
+			if listen.ListenName == "" || listen.ListenId == "" {
+				continue
+			}
+			if strings.Contains(listen.ListenName, headName) {
+				listenIds = append(listenIds, listen.ListenId)
+			}
+		}
+	}
+	return listenIds, nil
 }
 
 func (l *LoadBalancer) describeTask(taskId string) error {
