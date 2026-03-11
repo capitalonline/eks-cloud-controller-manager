@@ -1074,7 +1074,7 @@ func (l *LoadBalancer) describeLbInstance(ctx context.Context, service *v1.Servi
 
 func (l *LoadBalancer) getSelfListen(ctx context.Context, service *v1.Service, slbInfo *lb.DescribeVpcSlbResponseSlbInfo) ([]string, error) {
 	var (
-		ipMap     map[string]bool
+		ipMap     = make(map[string]bool)
 		listenIds []string
 	)
 
