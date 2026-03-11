@@ -78,6 +78,9 @@ const (
 	LbAlgorithmRr   = "rr"
 	LbAlgorithmWrr  = "wrr"
 	LbAlgorithmHash = "conhash"
+
+	SlbBuilding = "创建中"
+	SlbRunning  = "正常"
 )
 
 var lbSpecMap = map[string]string{
@@ -162,6 +165,14 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 		return nil, fmt.Errorf("failed to get or create SLB: %w", err)
 	}
 
+	if slbInfo.SlbStatus == SlbBuilding {
+		return nil, errors.New("slb is building, please wait")
+	}
+
+	if slbInfo.SlbStatus != SlbRunning {
+		return nil, fmt.Errorf("slb status: %s", slbInfo.SlbStatus)
+	}
+
 	if service.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeLocal {
 		nodes, err = l.makeLocalLbListen(ctx, service)
 		if err != nil {
@@ -187,6 +198,15 @@ func (l *LoadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName strin
 	if err != nil || resp == nil {
 		return fmt.Errorf("UpdateLoadBalancer failed, describe SLB error: %w", err)
 	}
+
+	if resp.Data.SlbStatus == SlbBuilding {
+		return errors.New("[UpdateLoadBalancer] slb is building, please wait")
+	}
+
+	if resp.Data.SlbStatus != SlbRunning {
+		return fmt.Errorf("[UpdateLoadBalancer] slb status: %s", resp.Data.SlbStatus)
+	}
+
 	if service.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeLocal {
 		nodes, err = l.makeLocalLbListen(ctx, service)
 		if err != nil {
