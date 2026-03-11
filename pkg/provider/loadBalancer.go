@@ -14,6 +14,7 @@ import (
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/lb"
 	v1 "k8s.io/api/core/v1"
+	k8serr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -178,10 +179,6 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 		if err != nil {
 			return nil, fmt.Errorf("failed to make local lb listen: %w", err)
 		}
-	}
-
-	if len(nodes) == 0 {
-		return nil, errors.New("no nodes found for service, retrying")
 	}
 
 	// 更新负载均衡监听器
@@ -398,6 +395,10 @@ func (l *LoadBalancer) makeLocalLbListen(ctx context.Context, service *v1.Servic
 	// 1. 查询 service 对应的 Endpoints
 	endpoints, err := l.clientSet.CoreV1().Endpoints(service.Namespace).Get(ctx, service.Name, metav1.GetOptions{})
 	if err != nil {
+		if k8serr.IsNotFound(err) {
+			klog.Infof("endpoints not found for service %s/%s, skip local lb listen", service.Namespace, service.Name)
+			return []*v1.Node{}, nil
+		}
 		return nil, fmt.Errorf("failed to get endpoints for service %s/%s: %w", service.Namespace, service.Name, err)
 	}
 
