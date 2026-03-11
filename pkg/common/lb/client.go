@@ -238,3 +238,28 @@ func (c *Client) BandwidthBillingScheme(request *BandwidthBillingSchemeRequest) 
 	err = c.Send(request, response)
 	return
 }
+
+func NewDeleteVpcSlbRequest() (request *DeleteVpcSlbRequest) {
+	request = &DeleteVpcSlbRequest{
+		BaseRequest: &cdshttp.BaseRequest{},
+	}
+	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionDeleteVpcSlb)
+	request.SetDomain(consts.LbApiHost)
+	return
+}
+
+func NewDeleteVpcSlbResponse() (response *DeleteVpcSlbResponse) {
+	response = &DeleteVpcSlbResponse{
+		BaseResponse: &cdshttp.BaseResponse{},
+	}
+	return
+}
+
+func (c *Client) DeleteVpcSlb(request *DeleteVpcSlbRequest) (response *DeleteVpcSlbResponse, err error) {
+	if request == nil {
+		request = NewDeleteVpcSlbRequest()
+	}
+	response = NewDeleteVpcSlbResponse()
+	err = c.Send(request, response)
+	return
+}

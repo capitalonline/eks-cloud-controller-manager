@@ -498,3 +498,37 @@ func (r *DeleteVpcSLBListenResponse) ToJsonString() string {
 func (r *DeleteVpcSLBListenResponse) FromJsonString(s string) error {
 	return json.Unmarshal([]byte(s), &r)
 }
+
+type DeleteVpcSlbRequest struct {
+	*cdshttp.BaseRequest
+	UserId     string `json:"-"`
+	CustomerId string `json:"-"`
+	SlbId      string `json:"SlbId"`
+}
+
+func (r *DeleteVpcSlbRequest) ToJsonString() string {
+	b, _ := json.Marshal(r)
+	return string(b)
+}
+
+func (r *DeleteVpcSlbRequest) FromJsonString(s string) error {
+	return json.Unmarshal([]byte(s), &r)
+}
+
+type DeleteVpcSlbResponse struct {
+	*cdshttp.BaseResponse
+	Data      interface{} `json:"Data"`
+	Code      string      `json:"Code"`
+	Message   string      `json:"Message"`
+	RequestId string      `json:"RequestId"`
+	TaskId    string      `json:"TaskId"`
+}
+
+func (r *DeleteVpcSlbResponse) ToJsonString() string {
+	b, _ := json.Marshal(r)
+	return string(b)
+}
+
+func (r *DeleteVpcSlbResponse) FromJsonString(s string) error {
+	return json.Unmarshal([]byte(s), &r)
+}

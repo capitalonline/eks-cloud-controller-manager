@@ -147,3 +147,16 @@ func DeleteVpcSLBListenRequest(request *lb.DeleteVpcSLBListenRequest) (*lb.Delet
 	}
 	return response, err
 }
+
+func DeleteVpcSlbRequest(request *lb.DeleteVpcSlbRequest) (*lb.DeleteVpcSlbResponse, error) {
+	credential := utils.NewCredential(consts.AccessKeyID, consts.AccessKeySecret)
+	cpf := profile.NewClientProfile()
+	cpf.HttpProfile.ReqMethod = http.MethodPost
+	cpf.HttpProfile.Endpoint = consts.LbApiHost
+	client, _ := lb.NewClient(credential, consts.Region, cpf)
+	response, err := client.DeleteVpcSlb(request)
+	if err != nil {
+		return nil, err
+	}
+	return response, err
+}
