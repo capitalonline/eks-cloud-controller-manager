@@ -1093,7 +1093,9 @@ func (l *LoadBalancer) describeTask(taskId string) error {
 	for i := 0; i < 200; i++ {
 		resp, err := api.DescribeTask(taskId)
 		if err != nil {
-			return err
+			klog.Warningf("describe task failed, error: %v", err)
+			time.Sleep(time.Second * 3)
+			continue
 		}
 		switch resp.Data.TaskStatus {
 		case LbTaskSuccess:
