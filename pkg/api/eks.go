@@ -1,11 +1,12 @@
 package api
 
 import (
+	"net/http"
+
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/eks"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/utils"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/utils/profile"
-	"net/http"
 )
 
 func NodeAddresses(clusterId, nodeId string, nodeName string) ([]string, error) {
