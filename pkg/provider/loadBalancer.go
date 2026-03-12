@@ -182,12 +182,13 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 	}
 
 	// 更新负载均衡监听器
-	if err = l.updateLbListen(ctx, service, nodes, slbInfo); err != nil {
+	vipList, err := l.updateLbListen(ctx, service, nodes, slbInfo)
+	if err != nil {
 		return nil, fmt.Errorf("failed to update load balancer: %w", err)
 	}
 
 	// 获取最终SLB状态
-	return l.getLoadBalancerStatus(slbInfo.SlbId)
+	return l.makeLoadBalancerStatus(vipList)
 }
 
 func (l *LoadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
@@ -210,7 +211,9 @@ func (l *LoadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName strin
 			return fmt.Errorf("failed to make local lb listen: %w", err)
 		}
 	}
-	return l.updateLbListen(ctx, service, nodes, &resp.Data)
+	_, err = l.updateLbListen(ctx, service, nodes, &resp.Data)
+
+	return err
 }
 
 func (l *LoadBalancer) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
@@ -251,27 +254,10 @@ func (l *LoadBalancer) getOrCreateSlb(ctx context.Context, service *v1.Service) 
 }
 
 // getLoadBalancerStatus 获取负载均衡器的状态信息
-func (l *LoadBalancer) getLoadBalancerStatus(slbId string) (*v1.LoadBalancerStatus, error) {
-	request := lb.NewDescribeVpcSlbRequest()
-	request.SlbID = slbId
-
-	response, err := api.DescribeVpcSlb(request)
-	if err != nil {
-		return nil, fmt.Errorf("failed to describe SLB: %w", err)
-	}
-
-	if response == nil {
-		return nil, errors.New("received nil response when querying SLB status")
-	}
-
-	if response.Code != consts.LbRequestSuccess {
-		return nil, fmt.Errorf("query SLB failed with code: %s, message: %s",
-			response.Code, response.Message)
-	}
-
+func (l *LoadBalancer) makeLoadBalancerStatus(ips []*lb.DescribeVpcSlbResponseVipInfo) (*v1.LoadBalancerStatus, error) {
 	// 构建负载均衡器入口状态
-	ingresses := make([]v1.LoadBalancerIngress, 0, len(response.Data.VipList))
-	for _, vipInfo := range response.Data.VipList {
+	ingresses := make([]v1.LoadBalancerIngress, 0, len(ips))
+	for _, vipInfo := range ips {
 		ingresses = append(ingresses, v1.LoadBalancerIngress{
 			IP: vipInfo.Vip,
 		})
@@ -662,20 +648,20 @@ func (l *LoadBalancer) buildCreateSlbRequest(service *v1.Service, params *servic
 	return request
 }
 
-func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, nodes []*v1.Node, slbInfo *lb.DescribeVpcSlbResponseSlbInfo) error {
+func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, nodes []*v1.Node, slbInfo *lb.DescribeVpcSlbResponseSlbInfo) ([]*lb.DescribeVpcSlbResponseVipInfo, error) {
 	// 获取VIP地址
 	params, err := l.parseServiceParams(service)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	vipList, err := l.extractVipFromResponse(slbInfo, params)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(vipList) == 0 {
-		return errors.New("SLB ip resources are not ready")
+		return nil, errors.New("SLB ip resources are not ready")
 	}
 
 	// 获取调度算法
@@ -692,7 +678,7 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 	// 构建监听器列表
 	listeners, err := l.buildListeners(service, nodes, algorithm, vipList)
 	if err != nil {
-		return fmt.Errorf("failed to build listeners: %w", err)
+		return nil, fmt.Errorf("failed to build listeners: %w", err)
 	}
 
 	if l.checkUpdateConforming(service, vipList, listeners) {
@@ -700,8 +686,7 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 			klog.Infof("ip %s port %v listeners %s are conforming, skip update",
 				listener.ListenIp, listener.ListenPort, listener.RsListString())
 		}
-		return nil
-
+		return vipList, nil
 	}
 
 	operatorType := UpdateListenExact
@@ -710,7 +695,12 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 	}
 
 	// 更新负载均衡监听器
-	return l.updateSlbListeners(slbInfo.SlbId, operatorType, listeners)
+	err = l.updateSlbListeners(slbInfo.SlbId, operatorType, listeners)
+	if err != nil {
+		return nil, err
+	}
+
+	return vipList, nil
 }
 
 func (l *LoadBalancer) checkUpdateConforming(service *v1.Service, vipList []*lb.DescribeVpcSlbResponseVipInfo, needChangeListeners []lb.VpcSlbUpdateListenRequestListen) (conforming bool) {
