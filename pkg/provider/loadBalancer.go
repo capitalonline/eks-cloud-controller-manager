@@ -727,14 +727,14 @@ func (l *LoadBalancer) checkUpdateConforming(service *v1.Service, vipList []*lb.
 func (l *LoadBalancer) checkListenerConforming(vipListenList []lb.ListenData, needChangeListener lb.VpcSlbUpdateListenRequestListen) (conforming bool) {
 	conforming = false
 	var targetListen *lb.ListenData
-	for _, vipListen := range vipListenList {
+	for i, vipListen := range vipListenList {
 		listenPort := vipListen.GetListenPort()
-		if listenPort == 0 && vipListen.ListenName == "" {
+		if listenPort == 0 || vipListen.ListenName == "" {
 			klog.Warningf("failed to get VIP %s listen port or name from SLB details", needChangeListener.ListenIp)
 			continue
 		}
 		if listenPort == needChangeListener.ListenPort && vipListen.ListenName == needChangeListener.ListenName {
-			targetListen = &vipListen
+			targetListen = &vipListenList[i]
 			break
 		}
 	}
