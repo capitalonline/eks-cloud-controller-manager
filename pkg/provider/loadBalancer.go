@@ -1005,10 +1005,20 @@ func (l *LoadBalancer) updateSlbListeners(slbId, operatorType string, listeners 
 }
 
 func (l *LoadBalancer) clearLbListen(ctx context.Context, service *v1.Service, slbInfo *lb.DescribeVpcSlbResponseSlbInfo) error {
-	if len(slbInfo.VipList) == 0 {
-		klog.Infof("No listeners to clear for SLB ID: %s, skip.", slbInfo.SlbId)
+	if slbInfo == nil || len(slbInfo.VipList) == 0 {
+		klog.Infof("No listeners to clear for SLB, service:%s, skip.", service.Name)
 		return nil
 	}
+
+	if slbInfo.SlbStatus == SlbBuilding {
+		klog.Infof("SLB %s, skip.", slbInfo.SlbStatus)
+		return nil
+	}
+
+	if slbInfo.SlbStatus != SlbRunning {
+		return fmt.Errorf("SLB %s", slbInfo.SlbStatus)
+	}
+
 	var (
 		err              error
 		listenIds        []string
