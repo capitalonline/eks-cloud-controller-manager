@@ -730,7 +730,8 @@ func (l *LoadBalancer) checkListenerConforming(vipListenList []lb.ListenData, ne
 	for i, vipListen := range vipListenList {
 		listenPort := vipListen.GetListenPort()
 		if listenPort == 0 || vipListen.ListenName == "" {
-			klog.Warningf("failed to get VIP %s listen port or name from SLB details", needChangeListener.ListenIp)
+			klog.Warningf("failed to get VIP %s listen port(%v) or name(%s) from SLB details",
+				needChangeListener.ListenIp, vipListen.ListenPort, vipListen.ListenName)
 			continue
 		}
 		if listenPort == needChangeListener.ListenPort && vipListen.ListenName == needChangeListener.ListenName {
