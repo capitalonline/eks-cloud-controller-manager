@@ -1140,6 +1140,10 @@ func GetListenPort(port interface{}) int {
 		return port.(int)
 	case int64:
 		return int(port.(int64))
+	case int32:
+		return int(port.(int32))
+	case int8:
+		return int(port.(int8))
 	default:
 		portStr := fmt.Sprintf("%v", port)
 		klog.Warningf("port: %v->%v", port, portStr)
