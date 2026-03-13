@@ -451,12 +451,10 @@ func (l *LoadBalancer) parseServiceParams(service *v1.Service) (*serviceParams, 
 		billingMethod = DefaultBillingType
 	}
 
-	billingMethodConfId := service.Annotations[AnnotationLbBillingMethodConfId]
 	confId := 0
-	confId64, err := strconv.ParseInt(billingMethodConfId, 10, 64)
-	if err != nil {
-		klog.Warningf("get billing method conf id: %s error", billingMethodConfId)
-	} else {
+	billingMethodConfId := service.Annotations[AnnotationLbBillingMethodConfId]
+	if billingMethodConfId != "" {
+		confId64, _ := strconv.ParseInt(billingMethodConfId, 10, 64)
 		confId = int(confId64)
 	}
 
@@ -682,10 +680,7 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 	}
 
 	if l.checkUpdateConforming(service, vipList, listeners) {
-		for _, listener := range listeners {
-			klog.Infof("ip %s port %v listeners %s are conforming, skip update",
-				listener.ListenIp, listener.ListenPort, listener.RsListString())
-		}
+		klog.Info("listener conforming, skip update")
 		return vipList, nil
 	}
 
@@ -744,6 +739,7 @@ func (l *LoadBalancer) checkListenerConforming(vipListenList []lb.ListenData, ne
 		}
 	}
 	if targetListen == nil {
+		klog.Infof("need change listener %s is not found in vip listen list", needChangeListener.ListenName)
 		return
 	}
 	// 首先比较长度
@@ -769,6 +765,10 @@ func (l *LoadBalancer) checkListenerConforming(vipListenList []lb.ListenData, ne
 
 	}
 	conforming = true
+
+	klog.Infof("ip %s port %v listeners %s are conforming",
+		needChangeListener.ListenIp, needChangeListener.ListenPort, needChangeListener.RsListString())
+
 	return
 }
 
