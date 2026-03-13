@@ -169,18 +169,6 @@ type ListenData struct {
 	Scheduler      string                 `json:"Scheduler"`
 }
 
-func (r *ListenData) GetListenPort() int {
-	// SLB OPEN-API ListenPort存在两个版本不一致的数据类型，需适配断言处理
-	switch r.ListenPort.(type) {
-	case int:
-		return r.ListenPort.(int)
-	case int64:
-		return int(r.ListenPort.(int64))
-	default:
-		return 0
-	}
-}
-
 type DescribeVpcSlbResponseListenInfo struct {
 	ListenId       string                 `json:"ListenId"`
 	ListenPort     string                 `json:"ListenPort"`

@@ -728,10 +728,10 @@ func (l *LoadBalancer) checkListenerConforming(vipListenList []lb.ListenData, ne
 	conforming = false
 	var targetListen *lb.ListenData
 	for i, vipListen := range vipListenList {
-		listenPort := vipListen.GetListenPort()
+		listenPort := GetListenPort(vipListen.ListenPort)
 		if listenPort == 0 || vipListen.ListenName == "" {
-			klog.Warningf("failed to get VIP %s listen port(%v) or name(%s) from SLB details",
-				needChangeListener.ListenIp, vipListen.ListenPort, vipListen.ListenName)
+			klog.Warningf("failed to get VIP %s listen port(%v->%v) or name(%s) from SLB details",
+				needChangeListener.ListenIp, vipListen.ListenPort, listenPort, vipListen.ListenName)
 			continue
 		}
 		if listenPort == needChangeListener.ListenPort && vipListen.ListenName == needChangeListener.ListenName {
@@ -1131,4 +1131,19 @@ func SlbName(svcName, namespace, uid string) string {
 		name = name[len(name)-64:]
 	}
 	return name
+}
+
+func GetListenPort(port interface{}) int {
+	// SLB OPEN-API ListenPort存在两个版本不一致的数据类型，需适配断言处理
+	switch port.(type) {
+	case int:
+		return port.(int)
+	case int64:
+		return int(port.(int64))
+	default:
+		portStr := fmt.Sprintf("%v", port)
+		klog.Warningf("port: %v->%v", port, portStr)
+		portInt64, _ := strconv.ParseInt(portStr, 10, 64)
+		return int(portInt64)
+	}
 }
