@@ -26,6 +26,11 @@ const (
 	ActionVpcBandwidthBillingScheme = "BandwidthBillingScheme"
 	ActionSendAlarm                 = "EKSAlarm"
 
+	ActionCreateLBRegistration = "CreateLBRegistration" // 注册loadbalancer
+	ActionUpdateLBPorts        = "UpdateLBPorts"        // 更新loadbalancer的ports信息
+	ActionQueryInvalidLBPorts  = "QueryInvalidLBPorts"  // 查询失效lb-ports
+	ActionDeleteLBRegistration = "DeleteLBRegistration" // 删除lb注册
+
 	ActionStandardCreateVpcSlb = "CreateVpcSlb"
 	ActionDeleteVpcSlb         = "DeleteVpcSlb"
 	ActionDeleteVpcSLBListen   = "DeleteVpcSLBListen" // 删除负载均衡监听

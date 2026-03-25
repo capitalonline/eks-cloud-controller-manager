@@ -6,12 +6,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/rand"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/api"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
+	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/eks"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/lb"
 	v1 "k8s.io/api/core/v1"
 	k8serr "k8s.io/apimachinery/pkg/api/errors"
@@ -98,7 +100,13 @@ var lbConfMap = map[string]string{
 	LBSpecExtreme:  "slb.v1.large",
 }
 
-var SLBNotFound error = errors.New("slb not found")
+var (
+	ErrDataNotFoundCode   = "ErrDataNotFound"
+	ErrorDataConflictCode = "ErrorDataConflict"
+
+	SLBNotFound       error = errors.New("slb not found")
+	DataNotFoundError error = errors.New("resource not found")
+)
 
 // 服务参数结构体
 type serviceParams struct {
@@ -160,6 +168,10 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 		return nil, err
 	}
 
+	if service.DeletionTimestamp != nil {
+		return nil, nil
+	}
+
 	// 获取或创建SLB实例
 	slbInfo, err := l.getOrCreateSlb(ctx, service)
 	if err != nil {
@@ -181,8 +193,25 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 		}
 	}
 
+	// 获取VIP地址
+	params, err := l.parseServiceParams(service)
+	if err != nil {
+		return nil, err
+	}
+
+	vipList, err := l.extractVipFromResponse(slbInfo, params)
+	if err != nil {
+		return nil, err
+	}
+
+	// 注册lb
+	err = l.registerClusterLB(ctx, service, slbInfo.SlbId, params, vipList)
+	if err != nil {
+		return nil, fmt.Errorf("failed to register cluster lb: %w", err)
+	}
+
 	// 更新负载均衡监听器
-	vipList, err := l.updateLbListen(ctx, service, nodes, slbInfo)
+	err = l.updateLbListen(service, nodes, slbInfo, vipList)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update load balancer: %w", err)
 	}
@@ -211,12 +240,76 @@ func (l *LoadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName strin
 			return fmt.Errorf("failed to make local lb listen: %w", err)
 		}
 	}
-	_, err = l.updateLbListen(ctx, service, nodes, &resp.Data)
 
-	return err
+	slbInfo := &resp.Data
+
+	var ports []string
+
+	for _, port := range service.Spec.Ports {
+		ports = append(ports, fmt.Sprintf("%v", port.Port))
+	}
+
+	// 获取VIP地址
+	params, err := l.parseServiceParams(service)
+	if err != nil {
+		return err
+	}
+
+	vipList, err := l.extractVipFromResponse(slbInfo, params)
+	if err != nil {
+		return err
+	}
+
+	// 查询lb注册，看是否存在需要释放的端口监听
+	disabledPorts, err := l.getDisabledPorts(service, slbInfo.SlbId, ports)
+	if err != nil {
+		klog.Warningf("[UpdateLoadBalancer] get disabled ports error: %v", err)
+	}
+
+	if err = l.updateLbListen(service, nodes, slbInfo, vipList); err != nil {
+		return err
+	}
+	// 更新注册
+	if err = l.updateClusterLBRegister(service, slbInfo.SlbId, ports); err != nil {
+		if errors.Is(err, DataNotFoundError) {
+			err = l.registerClusterLB(ctx, service, slbInfo.SlbId, params, vipList)
+			if err != nil {
+				klog.Warningf("[UpdateLoadBalancer] register cluster lb error: %v", err)
+			}
+		} else {
+			return err
+		}
+	}
+
+	if len(disabledPorts) == 0 {
+		return nil
+	}
+
+	// 释放失效监听
+	listenIds := l.getSelfListen(service, slbInfo, disabledPorts, false)
+	if len(listenIds) == 0 {
+		return nil
+	}
+
+	req := lb.NewDeleteLbListenersRequest()
+	req.ListenIds = listenIds
+	deleteListenResp, err := api.DeleteVpcSLBListenRequest(req)
+	if err != nil {
+		klog.Warningf("[UpdateLoadBalancer] delete listen error: %v", err)
+		return nil
+	}
+
+	return l.describeTask(deleteListenResp.TaskId)
+
 }
 
 func (l *LoadBalancer) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
+	// 删除lb注册
+	err := l.deleteClusterLBRegister(service)
+	if err != nil {
+		return err
+	}
+
 	response, err := l.describeLbInstance(ctx, service)
 	if err != nil || response == nil {
 		if errors.Is(err, SLBNotFound) {
@@ -225,7 +318,12 @@ func (l *LoadBalancer) EnsureLoadBalancerDeleted(ctx context.Context, clusterNam
 		return fmt.Errorf("EnsureLoadBalancerDeleted failed, describe SLB error: %w", err)
 	}
 
-	return l.clearLbListen(ctx, service, &response.Data)
+	err = l.clearLbListen(ctx, service, &response.Data)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // validateService 验证服务配置的有效性
@@ -251,6 +349,123 @@ func (l *LoadBalancer) getOrCreateSlb(ctx context.Context, service *v1.Service) 
 
 	// 返回已存在的SLB ID
 	return &describeResp.Data, nil
+}
+
+// registerClusterLB 注册集群lb
+func (l *LoadBalancer) registerClusterLB(ctx context.Context, service *v1.Service, slbId string, params *serviceParams, vipList []*lb.DescribeVpcSlbResponseVipInfo) error {
+	var (
+		eip, vip string
+		pattern  string
+		ports    []string
+		infoMap  = make(map[string]string)
+	)
+
+	for i, ip := range vipList {
+		if ip.VipType == EIP && eip == "" {
+			eip = vipList[i].Vip
+			continue
+		}
+		if ip.VipType == LanVip && vip == "" {
+			vip = vipList[i].Vip
+			continue
+		}
+	}
+	infoMap[AnnotationLbNetwork] = service.Annotations[AnnotationLbNetwork]
+	infoMap[AnnotationLbProtocol] = service.Annotations[AnnotationLbProtocol]
+	infoMap[AnnotationLbAlgorithm] = service.Annotations[AnnotationLbAlgorithm]
+	infoMap[AnnotationLbNetwork] = service.Annotations[AnnotationLbNetwork]
+
+	if params.selectSLB != "" {
+		pattern = "existing"
+		infoMap[AnnotationLbId] = service.Annotations[AnnotationLbId]
+		infoMap[AnnotationLbEip] = service.Annotations[AnnotationLbEip]
+		infoMap[AnnotationLbVip] = service.Annotations[AnnotationLbVip]
+	} else {
+		pattern = "new"
+		infoMap[AnnotationLbType] = service.Annotations[AnnotationLbType]
+		infoMap[AnnotationLbSpec] = service.Annotations[AnnotationLbSpec]
+		infoMap[AnnotationLbBandwidth] = service.Annotations[AnnotationLbBandwidth]
+		infoMap[AnnotationLbSubjectId] = service.Annotations[AnnotationLbSubjectId]
+		infoMap[AnnotationLbBillingMethod] = service.Annotations[AnnotationLbBillingMethod]
+		infoMap[AnnotationLbBillingMethodConfId] = service.Annotations[AnnotationLbBillingMethodConfId]
+	}
+
+	for _, port := range service.Spec.Ports {
+		ports = append(ports, fmt.Sprintf("%v", port.Port))
+	}
+
+	request := eks.NewRegisterClusterLBRequest()
+
+	request.ClusterId = consts.ClusterId
+	request.Pattern = pattern
+	request.SvcName = service.Name
+	request.SvcNs = service.Namespace
+	request.SlbId = slbId
+	request.Eip = eip
+	request.Vip = vip
+	request.SvcUid = string(service.UID)
+	request.Ports = strings.Join(ports, ",")
+	request.Info = infoMap
+
+	delay(service.CreationTimestamp.UnixNano())
+
+	_, err := api.RegisterClusterLB(request)
+	if err != nil {
+		if strings.Contains(err.Error(), ErrorDataConflictCode) {
+			return errors.New("slb ip conflict")
+		}
+		if strings.Contains(err.Error(), ErrDataNotFoundCode) {
+			return errors.New("cluster invalid: " + consts.ClusterId)
+		}
+		return err
+	}
+
+	return nil
+}
+
+func (l *LoadBalancer) getDisabledPorts(service *v1.Service, slbId string, ports []string) ([]int, error) {
+	request := eks.NewGetClusterLBDisabledPortsRequest()
+	request.ClusterId = consts.ClusterId
+	request.SvcName = service.Name
+	request.SvcNs = service.Namespace
+	request.SlbId = slbId
+	request.SvcUid = string(service.UID)
+	request.Ports = strings.Join(ports, ",")
+
+	resp, err := api.GetClusterLBDisabledPorts(request)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Data.InvalidPorts, nil
+}
+
+func (l *LoadBalancer) updateClusterLBRegister(service *v1.Service, slbId string, ports []string) error {
+	request := eks.NewUpdateClusterLBRequest()
+	request.ClusterId = consts.ClusterId
+	request.SvcName = service.Name
+	request.SvcNs = service.Namespace
+	request.SlbId = slbId
+	request.SvcUid = string(service.UID)
+	request.Ports = strings.Join(ports, ",")
+
+	_, err := api.UpdateClusterLB(request)
+	if strings.Contains(err.Error(), ErrDataNotFoundCode) {
+		return DataNotFoundError
+	}
+
+	return err
+}
+
+func (l *LoadBalancer) deleteClusterLBRegister(service *v1.Service) error {
+	request := eks.NewDeleteClusterLBRequest()
+	request.ClusterId = consts.ClusterId
+	request.SvcName = service.Name
+	request.SvcNs = service.Namespace
+	request.SvcUid = string(service.UID)
+
+	_, err := api.DeleteClusterLB(request)
+	return err
 }
 
 // getLoadBalancerStatus 获取负载均衡器的状态信息
@@ -646,20 +861,9 @@ func (l *LoadBalancer) buildCreateSlbRequest(service *v1.Service, params *servic
 	return request
 }
 
-func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, nodes []*v1.Node, slbInfo *lb.DescribeVpcSlbResponseSlbInfo) ([]*lb.DescribeVpcSlbResponseVipInfo, error) {
-	// 获取VIP地址
-	params, err := l.parseServiceParams(service)
-	if err != nil {
-		return nil, err
-	}
-
-	vipList, err := l.extractVipFromResponse(slbInfo, params)
-	if err != nil {
-		return nil, err
-	}
-
+func (l *LoadBalancer) updateLbListen(service *v1.Service, nodes []*v1.Node, slbInfo *lb.DescribeVpcSlbResponseSlbInfo, vipList []*lb.DescribeVpcSlbResponseVipInfo) error {
 	if len(vipList) == 0 {
-		return nil, errors.New("SLB ip resources are not ready")
+		return errors.New("SLB ip resources are not ready")
 	}
 
 	// 获取调度算法
@@ -676,26 +880,23 @@ func (l *LoadBalancer) updateLbListen(ctx context.Context, service *v1.Service, 
 	// 构建监听器列表
 	listeners, err := l.buildListeners(service, nodes, algorithm, vipList)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build listeners: %w", err)
+		return fmt.Errorf("failed to build listeners: %w", err)
 	}
 
 	if l.checkUpdateConforming(service, vipList, listeners) {
 		klog.Info("listener conforming, skip update")
-		return vipList, nil
+		return nil
 	}
 
 	operatorType := UpdateListenExact
-	if params.selectSLB == "" {
-		operatorType = UpdateListenFull
-	}
 
 	// 更新负载均衡监听器
 	err = l.updateSlbListeners(slbInfo.SlbId, operatorType, listeners)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return vipList, nil
+	return nil
 }
 
 func (l *LoadBalancer) checkUpdateConforming(service *v1.Service, vipList []*lb.DescribeVpcSlbResponseVipInfo, needChangeListeners []lb.VpcSlbUpdateListenRequestListen) (conforming bool) {
@@ -1027,7 +1228,7 @@ func (l *LoadBalancer) clearLbListen(ctx context.Context, service *v1.Service, s
 		clearResp        *lb.VpcSlbClearListenResponse
 	)
 
-	listenIds, err = l.getSelfListen(ctx, service, slbInfo)
+	listenIds = l.getSelfListen(service, slbInfo, nil, true)
 	if len(listenIds) != 0 {
 		req := lb.NewDeleteLbListenersRequest()
 		req.ListenIds = listenIds
@@ -1073,14 +1274,23 @@ func (l *LoadBalancer) describeLbInstance(ctx context.Context, service *v1.Servi
 	return response, nil
 }
 
-func (l *LoadBalancer) getSelfListen(ctx context.Context, service *v1.Service, slbInfo *lb.DescribeVpcSlbResponseSlbInfo) ([]string, error) {
+func (l *LoadBalancer) getSelfListen(service *v1.Service, slbInfo *lb.DescribeVpcSlbResponseSlbInfo, ports []int, getAll bool) []string {
 	var (
 		ipMap     = make(map[string]bool)
 		listenIds []string
+		portMap   = make(map[int]bool)
 	)
 
 	if len(service.Status.LoadBalancer.Ingress) == 0 {
-		return nil, nil
+		return nil
+	}
+
+	if len(ports) == 0 && !getAll {
+		return nil
+	}
+
+	for _, v := range ports {
+		portMap[v] = true
 	}
 
 	for _, ingress := range service.Status.LoadBalancer.Ingress {
@@ -1101,11 +1311,18 @@ func (l *LoadBalancer) getSelfListen(ctx context.Context, service *v1.Service, s
 				continue
 			}
 			if strings.Contains(listen.ListenName, headName) {
-				listenIds = append(listenIds, listen.ListenId)
+				if getAll {
+					listenIds = append(listenIds, listen.ListenId)
+					continue
+				}
+				if _, exist := portMap[GetListenPort(listen.ListenPort)]; exist {
+					listenIds = append(listenIds, listen.ListenId)
+					continue
+				}
 			}
 		}
 	}
-	return listenIds, nil
+	return listenIds
 }
 
 func (l *LoadBalancer) describeTask(taskId string) error {
@@ -1160,4 +1377,17 @@ func GetListenPort(port interface{}) int {
 		portInt64, _ := strconv.ParseInt(portStr, 10, 64)
 		return int(portInt64)
 	}
+}
+
+func delay(seed int64) {
+	seed += time.Now().UnixNano()
+	rand.New(rand.NewSource(seed))
+
+	minSleep := 1 * time.Second
+	maxSleep := 3 * time.Second
+
+	randomSleepDuration := time.Duration(rand.Int63n(int64(maxSleep-minSleep))) + minSleep
+
+	time.Sleep(randomSleepDuration)
+
 }
