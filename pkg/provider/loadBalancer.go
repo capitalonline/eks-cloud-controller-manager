@@ -204,8 +204,18 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 		return nil, err
 	}
 
+	// 查询lb注册，看是否存在需要释放的端口监听
+	var ports []string
+	for _, port := range service.Spec.Ports {
+		ports = append(ports, fmt.Sprintf("%v", port.Port))
+	}
+	disabledPorts, err := l.getDisabledPorts(service, slbInfo.SlbId, ports)
+	if err != nil {
+		klog.Warningf("[EnsureLoadBalancer] get disabled ports error: %v", err)
+	}
+
 	// 注册lb
-	err = l.registerClusterLB(ctx, service, slbInfo.SlbId, params, vipList)
+	err = l.registerClusterLB(ctx, service, slbInfo.SlbId, params, vipList, ports)
 	if err != nil {
 		return nil, fmt.Errorf("failed to register cluster lb: %w", err)
 	}
@@ -214,6 +224,11 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 	err = l.updateLbListen(service, nodes, slbInfo, vipList)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update load balancer: %w", err)
+	}
+
+	err = l.deleteDisabledPorts(service, slbInfo, disabledPorts)
+	if err != nil {
+		klog.Warningf("[EnsureLoadBalancer] error: %v", err)
 	}
 
 	// 获取最终SLB状态
@@ -272,7 +287,7 @@ func (l *LoadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName strin
 	// 更新注册
 	if err = l.updateClusterLBRegister(service, slbInfo.SlbId, ports); err != nil {
 		if errors.Is(err, DataNotFoundError) {
-			err = l.registerClusterLB(ctx, service, slbInfo.SlbId, params, vipList)
+			err = l.registerClusterLB(ctx, service, slbInfo.SlbId, params, vipList, ports)
 			if err != nil {
 				klog.Warningf("[UpdateLoadBalancer] register cluster lb error: %v", err)
 			}
@@ -281,26 +296,13 @@ func (l *LoadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName strin
 		}
 	}
 
-	if len(disabledPorts) == 0 {
-		return nil
-	}
-
-	// 释放失效监听
-	listenIds := l.getSelfListen(service, slbInfo, disabledPorts, false)
-	if len(listenIds) == 0 {
-		return nil
-	}
-
-	req := lb.NewDeleteLbListenersRequest()
-	req.ListenIds = listenIds
-	deleteListenResp, err := api.DeleteVpcSLBListenRequest(req)
+	err = l.deleteDisabledPorts(service, slbInfo, disabledPorts)
 	if err != nil {
-		klog.Warningf("[UpdateLoadBalancer] delete listen error: %v", err)
+		klog.Warningf("[UpdateLoadBalancer] error: %v", err)
 		return nil
 	}
 
-	return l.describeTask(deleteListenResp.TaskId)
-
+	return nil
 }
 
 func (l *LoadBalancer) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
@@ -352,11 +354,10 @@ func (l *LoadBalancer) getOrCreateSlb(ctx context.Context, service *v1.Service) 
 }
 
 // registerClusterLB 注册集群lb
-func (l *LoadBalancer) registerClusterLB(ctx context.Context, service *v1.Service, slbId string, params *serviceParams, vipList []*lb.DescribeVpcSlbResponseVipInfo) error {
+func (l *LoadBalancer) registerClusterLB(ctx context.Context, service *v1.Service, slbId string, params *serviceParams, vipList []*lb.DescribeVpcSlbResponseVipInfo, ports []string) error {
 	var (
 		eip, vip string
 		pattern  string
-		ports    []string
 		infoMap  = make(map[string]string)
 	)
 
@@ -388,10 +389,6 @@ func (l *LoadBalancer) registerClusterLB(ctx context.Context, service *v1.Servic
 		infoMap[AnnotationLbSubjectId] = service.Annotations[AnnotationLbSubjectId]
 		infoMap[AnnotationLbBillingMethod] = service.Annotations[AnnotationLbBillingMethod]
 		infoMap[AnnotationLbBillingMethodConfId] = service.Annotations[AnnotationLbBillingMethodConfId]
-	}
-
-	for _, port := range service.Spec.Ports {
-		ports = append(ports, fmt.Sprintf("%v", port.Port))
 	}
 
 	request := eks.NewRegisterClusterLBRequest()
@@ -438,6 +435,26 @@ func (l *LoadBalancer) getDisabledPorts(service *v1.Service, slbId string, ports
 	}
 
 	return resp.Data.InvalidPorts, nil
+}
+
+func (l *LoadBalancer) deleteDisabledPorts(service *v1.Service, slbInfo *lb.DescribeVpcSlbResponseSlbInfo, disabledPorts []int) error {
+	if len(disabledPorts) == 0 {
+		return nil
+	}
+	// 释放失效监听
+	listenIds := l.getSelfListen(service, slbInfo, disabledPorts, false)
+	if len(listenIds) == 0 {
+		return nil
+	}
+
+	req := lb.NewDeleteLbListenersRequest()
+	req.ListenIds = listenIds
+	deleteListenResp, err := api.DeleteVpcSLBListenRequest(req)
+	if err != nil {
+		klog.Warningf("delete disabled listen error: %v", err)
+		return nil
+	}
+	return l.describeTask(deleteListenResp.TaskId)
 }
 
 func (l *LoadBalancer) updateClusterLBRegister(service *v1.Service, slbId string, ports []string) error {
