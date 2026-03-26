@@ -204,6 +204,10 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 		return nil, err
 	}
 
+	if len(vipList) == 0 {
+		return nil, errors.New("SLB ip resources are not ready")
+	}
+
 	// 查询lb注册，看是否存在需要释放的端口监听
 	var ports []string
 	for _, port := range service.Spec.Ports {
@@ -212,6 +216,11 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 	disabledPorts, err := l.getDisabledPorts(service, slbInfo.SlbId, ports)
 	if err != nil {
 		klog.Warningf("[EnsureLoadBalancer] get disabled ports error: %v", err)
+	}
+
+	err = l.deleteDisabledPorts(service, slbInfo, disabledPorts)
+	if err != nil {
+		return nil, fmt.Errorf("delete disabled ports error: %v", err)
 	}
 
 	// 注册lb
@@ -224,11 +233,6 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 	err = l.updateLbListen(service, nodes, slbInfo, vipList)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update load balancer: %w", err)
-	}
-
-	err = l.deleteDisabledPorts(service, slbInfo, disabledPorts)
-	if err != nil {
-		klog.Warningf("[EnsureLoadBalancer] error: %v", err)
 	}
 
 	// 获取最终SLB状态
@@ -273,6 +277,10 @@ func (l *LoadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName strin
 	vipList, err := l.extractVipFromResponse(slbInfo, params)
 	if err != nil {
 		return err
+	}
+
+	if len(vipList) == 0 {
+		return errors.New("SLB ip resources are not ready")
 	}
 
 	// 查询lb注册，看是否存在需要释放的端口监听
@@ -449,12 +457,28 @@ func (l *LoadBalancer) deleteDisabledPorts(service *v1.Service, slbInfo *lb.Desc
 
 	req := lb.NewDeleteLbListenersRequest()
 	req.ListenIds = listenIds
-	deleteListenResp, err := api.DeleteVpcSLBListenRequest(req)
-	if err != nil {
+
+	taskId := ""
+
+	for i := 0; i < 6; i++ {
+		deleteListenResp, err := api.DeleteVpcSLBListenRequest(req)
+		if err == nil {
+			taskId = deleteListenResp.TaskId
+			break
+		}
 		klog.Warningf("delete disabled listen error: %v", err)
+		if strings.Contains(err.Error(), "资源锁失败") {
+			time.Sleep(10 * time.Second)
+			continue
+		}
+		break
+	}
+
+	if taskId == "" {
 		return nil
 	}
-	return l.describeTask(deleteListenResp.TaskId)
+
+	return l.describeTask(taskId)
 }
 
 func (l *LoadBalancer) updateClusterLBRegister(service *v1.Service, slbId string, ports []string) error {
@@ -879,10 +903,6 @@ func (l *LoadBalancer) buildCreateSlbRequest(service *v1.Service, params *servic
 }
 
 func (l *LoadBalancer) updateLbListen(service *v1.Service, nodes []*v1.Node, slbInfo *lb.DescribeVpcSlbResponseSlbInfo, vipList []*lb.DescribeVpcSlbResponseVipInfo) error {
-	if len(vipList) == 0 {
-		return errors.New("SLB ip resources are not ready")
-	}
-
 	// 获取调度算法
 	algorithm := l.getSchedulerAlgorithm(service)
 
