@@ -1262,28 +1262,20 @@ func (l *LoadBalancer) clearLbListen(ctx context.Context, service *v1.Service, s
 		listenIds        []string
 		taskId           string
 		deleteListenResp *lb.DeleteVpcSLBListenResponse
-		clearResp        *lb.VpcSlbClearListenResponse
 	)
 
 	listenIds = l.getSelfListen(service, slbInfo, nil, true)
-	if len(listenIds) != 0 {
-		req := lb.NewDeleteLbListenersRequest()
-		req.ListenIds = listenIds
-		deleteListenResp, err = api.DeleteVpcSLBListenRequest(req)
-		if err != nil {
-			return err
-		}
-		taskId = deleteListenResp.TaskId
-	} else {
-		clearResp, err = api.VpcSlbClearListen(slbInfo.SlbId)
-		if err != nil {
-			if clearResp != nil && clearResp.Code == consts.ErrorSlbNotFound {
-				return nil
-			}
-			return err
-		}
-		taskId = clearResp.TaskId
+	if len(listenIds) == 0 {
+		klog.Warningf("No listeners to clear for SLB, service:%s, skip.", service.Name)
+		return nil
 	}
+	req := lb.NewDeleteLbListenersRequest()
+	req.ListenIds = listenIds
+	deleteListenResp, err = api.DeleteVpcSLBListenRequest(req)
+	if err != nil {
+		return err
+	}
+	taskId = deleteListenResp.TaskId
 
 	return l.describeTask(taskId)
 }
@@ -1319,6 +1311,7 @@ func (l *LoadBalancer) getSelfListen(service *v1.Service, slbInfo *lb.DescribeVp
 	)
 
 	if len(service.Status.LoadBalancer.Ingress) == 0 {
+		klog.Warningf("service %s does not have an ingress IP address", service.Name)
 		return nil
 	}
 
@@ -1398,22 +1391,13 @@ func SlbName(svcName, namespace, uid string) string {
 }
 
 func GetListenPort(port interface{}) int {
-	// SLB OPEN-API ListenPort存在两个版本不一致的数据类型，需适配断言处理
-	switch port.(type) {
-	case int:
-		return port.(int)
-	case int64:
-		return int(port.(int64))
-	case int32:
-		return int(port.(int32))
-	case int8:
-		return int(port.(int8))
-	default:
-		portStr := fmt.Sprintf("%v", port)
-		klog.Warningf("port: %v->%v", port, portStr)
-		portInt64, _ := strconv.ParseInt(portStr, 10, 64)
-		return int(portInt64)
+	// SLB OPEN-API ListenPort存在两个版本不一致的数据类型，需适配特殊处理
+	portStr := fmt.Sprintf("%v", port)
+	portInt64, _ := strconv.ParseInt(portStr, 10, 64)
+	if portInt64 == 0 {
+		klog.Warningf("parse port failed: %v", port)
 	}
+	return int(portInt64)
 }
 
 func delay(seed int64) {
