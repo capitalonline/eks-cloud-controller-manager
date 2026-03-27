@@ -447,6 +447,7 @@ func (l *LoadBalancer) getDisabledPorts(service *v1.Service, slbId string, ports
 
 func (l *LoadBalancer) deleteDisabledPorts(service *v1.Service, slbInfo *lb.DescribeVpcSlbResponseSlbInfo, disabledPorts []int) error {
 	if len(disabledPorts) == 0 {
+		klog.Infof("%s/%s no disabled ports", service.Namespace, service.Name)
 		return nil
 	}
 	// 释放失效监听
