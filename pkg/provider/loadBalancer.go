@@ -84,6 +84,7 @@ const (
 
 	SlbBuilding = "创建中"
 	SlbRunning  = "正常"
+	SlbError    = "错误"
 )
 
 var lbSpecMap = map[string]string{
@@ -1249,7 +1250,7 @@ func (l *LoadBalancer) clearLbListen(ctx context.Context, service *v1.Service, s
 		return nil
 	}
 
-	if slbInfo.SlbStatus == SlbBuilding {
+	if slbInfo.SlbStatus == SlbBuilding || slbInfo.SlbStatus == SlbError {
 		klog.Infof("SLB %s, skip.", slbInfo.SlbStatus)
 		return nil
 	}
