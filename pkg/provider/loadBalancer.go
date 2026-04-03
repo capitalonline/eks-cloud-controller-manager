@@ -493,7 +493,7 @@ func (l *LoadBalancer) updateClusterLBRegister(service *v1.Service, slbId string
 	request.Ports = strings.Join(ports, ",")
 
 	_, err := api.UpdateClusterLB(request)
-	if strings.Contains(err.Error(), ErrDataNotFoundCode) {
+	if err != nil && strings.Contains(err.Error(), ErrDataNotFoundCode) {
 		return DataNotFoundError
 	}
 
