@@ -176,7 +176,7 @@ func (l *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName strin
 	// 获取或创建SLB实例
 	slbInfo, err := l.getOrCreateSlb(ctx, service)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get or create SLB: %w", err)
+		return nil, fmt.Errorf("get or create SLB warning: %w", err)
 	}
 
 	if slbInfo.SlbStatus == SlbBuilding {
@@ -562,17 +562,19 @@ func (l *LoadBalancer) createSlb(ctx context.Context, service *v1.Service) (*lb.
 		}
 	}
 
+	return nil, fmt.Errorf("SLB creation task initiated, waiting for completion, task ID %s", taskId)
+
 	// 等待任务完成
-	if err = l.describeTask(taskId); err != nil {
-		return nil, err
-	}
-
-	describeResp, err := l.describeLbInstance(ctx, service)
-	if err != nil || describeResp == nil {
-		return nil, fmt.Errorf("failed to describe SLB: %w", err)
-	}
-
-	return &describeResp.Data, nil
+	//if err = l.describeTask(taskId); err != nil {
+	//	return nil, err
+	//}
+	//
+	//describeResp, err := l.describeLbInstance(ctx, service)
+	//if err != nil || describeResp == nil {
+	//	return nil, fmt.Errorf("failed to describe SLB: %w", err)
+	//}
+	//
+	//return &describeResp.Data, nil
 }
 
 func (l *LoadBalancer) createPackageSlb(azCode string, service *v1.Service, params *serviceParams) (string, error) {
