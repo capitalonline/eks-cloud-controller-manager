@@ -2,18 +2,21 @@ package lb
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
+
 	cdshttp "github.com/capitalonline/eks-cloud-controller-manager/pkg/utils/http"
 )
 
 type PackageCreateSlbRequest struct {
 	*cdshttp.BaseRequest
-	UserId            string                        `json:"-"`
-	CustomerId        string                        `json:"-"`
-	VpcId             string                        `json:"VpcId"`
-	AvailableZoneCode string                        `json:"AvailableZoneCode"`
-	Level             int                           `json:"Level,omitempty"`
-	SlbInfo           PackageCreateSlbInfo          `json:"SlbInfo"`
-	BandwidthInfo     PackageCreateSlbBandwidthInfo `json:"BandwidthInfo"`
+	UserId            string                         `json:"-"`
+	CustomerId        string                         `json:"-"`
+	VpcId             string                         `json:"VpcId"`
+	AvailableZoneCode string                         `json:"AvailableZoneCode"`
+	Level             int                            `json:"Level,omitempty"`
+	SlbInfo           PackageCreateSlbInfo           `json:"SlbInfo"`
+	BandwidthInfo     *PackageCreateSlbBandwidthInfo `json:"BandwidthInfo,omitempty"`
 }
 
 type PackageCreateSlbInfo struct {
@@ -46,14 +49,14 @@ func (r *PackageCreateSlbRequest) FromJsonString(s string) error {
 
 type PackageCreateSlbResponse struct {
 	*cdshttp.BaseResponse
-	Data      PackageCreateSlbResponseData `json:"Data"`
-	Code      string                       `json:"Code"`
-	Message   string                       `json:"Message"`
-	RequestId string                       `json:"RequestId"`
-	TaskId    string                       `json:"TaskId"`
+	Data      CreateSlbResponseData `json:"Data"`
+	Code      string                `json:"Code"`
+	Message   string                `json:"Message"`
+	RequestId string                `json:"RequestId"`
+	TaskId    string                `json:"TaskId"`
 }
 
-type PackageCreateSlbResponseData struct {
+type CreateSlbResponseData struct {
 	SlbId string `json:"SlbId"`
 }
 
@@ -63,6 +66,45 @@ func (r *PackageCreateSlbResponse) ToJsonString() string {
 }
 
 func (r *PackageCreateSlbResponse) FromJsonString(s string) error {
+	return json.Unmarshal([]byte(s), &r)
+}
+
+type StandardCreateSlbRequest struct {
+	*cdshttp.BaseRequest
+	UserId            string `json:"-"`
+	CustomerId        string `json:"-"`
+	RegionCode        string `json:"RegionCode"`
+	AvailableZoneCode string `json:"AvailableZoneCode"`
+	VpcId             string `json:"VpcId"`
+	Name              string `json:"Name"`
+	NetType           string `json:"NetType"`
+	ConfType          string `json:"ConfType"`
+}
+
+func (r *StandardCreateSlbRequest) ToJsonString() string {
+	b, _ := json.Marshal(r)
+	return string(b)
+}
+
+func (r *StandardCreateSlbRequest) FromJsonString(s string) error {
+	return json.Unmarshal([]byte(s), &r)
+}
+
+type StandardCreateSlbResponse struct {
+	*cdshttp.BaseResponse
+	Data      CreateSlbResponseData `json:"Data"`
+	Code      string                `json:"Code"`
+	Message   string                `json:"Message"`
+	RequestId string                `json:"RequestId"`
+	TaskId    string                `json:"TaskId"`
+}
+
+func (r *StandardCreateSlbResponse) ToJsonString() string {
+	b, _ := json.Marshal(r)
+	return string(b)
+}
+
+func (r *StandardCreateSlbResponse) FromJsonString(s string) error {
 	return json.Unmarshal([]byte(s), &r)
 }
 
@@ -113,22 +155,31 @@ type DescribeVpcSlbResponseSlbInfo struct {
 }
 
 type DescribeVpcSlbResponseVipInfo struct {
-	ListenList interface{} `json:"ListenList"`
-	Vip        string      `json:"Vip"`
-	VipId      string      `json:"VipId"`
-	VipType    string      `json:"VipType"`
+	ListenList []ListenData `json:"ListenList"`
+	Vip        string       `json:"Vip"`
+	VipId      string       `json:"VipId"`
+	VipType    string       `json:"VipType"`
+}
+type ListenData struct {
+	ListenId       string                 `json:"ListenId"`
+	ListenName     string                 `json:"ListenName"`
+	ListenPort     interface{}            `json:"ListenPort"`
+	ListenProtocol string                 `json:"ListenProtocol"`
+	RsList         []DescribeVpcSlbRsInfo `json:"RsList"`
+	Scheduler      string                 `json:"Scheduler"`
 }
 
 type DescribeVpcSlbResponseListenInfo struct {
-	ListenId       string                         `json:"ListenId"`
-	ListenPort     string                         `json:"ListenPort"`
-	ListenProtocol string                         `json:"ListenProtocol"`
-	RsList         []DescribeVpcSlbResponseRsInfo `json:"RsList"`
+	ListenId       string                 `json:"ListenId"`
+	ListenPort     string                 `json:"ListenPort"`
+	ListenProtocol string                 `json:"ListenProtocol"`
+	RsList         []DescribeVpcSlbRsInfo `json:"RsList"`
 }
 
-type DescribeVpcSlbResponseRsInfo struct {
+type DescribeVpcSlbRsInfo struct {
 	RsIp   string `json:"RsIp"`
 	RsPort string `json:"RsPort"`
+	RsType string `json:"RsType"`
 }
 
 func (r *DescribeVpcSlbResponse) ToJsonString() string {
@@ -157,6 +208,14 @@ type VpcSlbUpdateListenRequestListen struct {
 	Timeout        int                                  `json:"Timeout"`
 	RsList         []VpcSlbUpdateListenRequestRs        `json:"RsList"`
 	HealthCheck    VpcSlbUpdateListenRequestHealthCheck `json:"HealthCheck"`
+}
+
+func (vl *VpcSlbUpdateListenRequestListen) RsListString() string {
+	var l []string
+	for _, v := range vl.RsList {
+		l = append(l, fmt.Sprintf("%v:%v", v.RsLanIp, v.RsPort))
+	}
+	return strings.Join(l, ",")
 }
 
 type VpcSlbUpdateListenRequestHealthCheck struct {
@@ -391,5 +450,73 @@ func (r *BandwidthBillingSchemeResponse) ToJsonString() string {
 }
 
 func (r *BandwidthBillingSchemeResponse) FromJsonString(s string) error {
+	return json.Unmarshal([]byte(s), &r)
+}
+
+type DeleteVpcSLBListenRequest struct {
+	*cdshttp.BaseRequest
+	UserId     string   `json:"-"`
+	CustomerId string   `json:"-"`
+	ListenIds  []string `json:"ListenIds"`
+}
+
+func (r *DeleteVpcSLBListenRequest) ToJsonString() string {
+	b, _ := json.Marshal(r)
+	return string(b)
+}
+
+func (r *DeleteVpcSLBListenRequest) FromJsonString(s string) error {
+	return json.Unmarshal([]byte(s), &r)
+}
+
+type DeleteVpcSLBListenResponse struct {
+	*cdshttp.BaseResponse
+	Data      interface{} `json:"Data"`
+	Code      string      `json:"Code"`
+	Message   string      `json:"Message"`
+	RequestId string      `json:"RequestId"`
+	TaskId    string      `json:"TaskId"`
+}
+
+func (r *DeleteVpcSLBListenResponse) ToJsonString() string {
+	b, _ := json.Marshal(r)
+	return string(b)
+}
+
+func (r *DeleteVpcSLBListenResponse) FromJsonString(s string) error {
+	return json.Unmarshal([]byte(s), &r)
+}
+
+type DeleteVpcSlbRequest struct {
+	*cdshttp.BaseRequest
+	UserId     string `json:"-"`
+	CustomerId string `json:"-"`
+	SlbId      string `json:"SlbId"`
+}
+
+func (r *DeleteVpcSlbRequest) ToJsonString() string {
+	b, _ := json.Marshal(r)
+	return string(b)
+}
+
+func (r *DeleteVpcSlbRequest) FromJsonString(s string) error {
+	return json.Unmarshal([]byte(s), &r)
+}
+
+type DeleteVpcSlbResponse struct {
+	*cdshttp.BaseResponse
+	Data      interface{} `json:"Data"`
+	Code      string      `json:"Code"`
+	Message   string      `json:"Message"`
+	RequestId string      `json:"RequestId"`
+	TaskId    string      `json:"TaskId"`
+}
+
+func (r *DeleteVpcSlbResponse) ToJsonString() string {
+	b, _ := json.Marshal(r)
+	return string(b)
+}
+
+func (r *DeleteVpcSlbResponse) FromJsonString(s string) error {
 	return json.Unmarshal([]byte(s), &r)
 }

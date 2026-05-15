@@ -28,8 +28,22 @@ func NewPackageCreateSlbRequest() (request *PackageCreateSlbRequest) {
 	return
 }
 
+func NewStandardCreateSlbRequest() (request *StandardCreateSlbRequest) {
+	request = &StandardCreateSlbRequest{
+		BaseRequest: &cdshttp.BaseRequest{},
+	}
+	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionStandardCreateVpcSlb)
+	request.SetDomain(consts.LbApiHost)
+	return
+}
+
 func NewPackageCreateSlbResponse() (response *PackageCreateSlbResponse) {
 	response = &PackageCreateSlbResponse{BaseResponse: &cdshttp.BaseResponse{}}
+	return
+}
+
+func NewStandardCreateSlbResponse() (response *StandardCreateSlbResponse) {
+	response = &StandardCreateSlbResponse{BaseResponse: &cdshttp.BaseResponse{}}
 	return
 }
 
@@ -42,6 +56,14 @@ func (c *Client) PackageCreateSlb(request *PackageCreateSlbRequest) (response *P
 	return
 }
 
+func (c *Client) StandardCreateSlb(request *StandardCreateSlbRequest) (response *StandardCreateSlbResponse, err error) {
+	if request == nil {
+		request = NewStandardCreateSlbRequest()
+	}
+	response = NewStandardCreateSlbResponse()
+	err = c.Send(request, response)
+	return
+}
 func NewDescribeVpcSlbRequest() (request *DescribeVpcSlbRequest) {
 	request = &DescribeVpcSlbRequest{
 		BaseRequest: &cdshttp.BaseRequest{},
@@ -117,30 +139,30 @@ func (c *Client) DescribeTask(request *DescribeTaskRequest) (response *DescribeT
 	return
 }
 
-//func NewDeleteLbListenersRequest() (request *DeleteLbListenersRequest) {
-//	request = &DeleteLbListenersRequest{
-//		BaseRequest: &cdshttp.BaseRequest{},
-//	}
-//	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionDeleteLbInstance)
-//	request.SetDomain(consts.ApiHost)
-//	return
-//}
-//
-//func NewDeleteLbListenersResponse() (response *DeleteLbListenersResponse) {
-//	response = &DeleteLbListenersResponse{
-//		BaseResponse: &cdshttp.BaseResponse{},
-//	}
-//	return
-//}
-//
-//func (c *Client) DeleteLbListeners(request *DeleteLbListenersRequest) (response *DeleteLbListenersResponse, err error) {
-//	if request == nil {
-//		request = NewDeleteLbListenersRequest()
-//	}
-//	response = NewDeleteLbListenersResponse()
-//	err = c.Send(request, response)
-//	return
-//}
+func NewDeleteLbListenersRequest() (request *DeleteVpcSLBListenRequest) {
+	request = &DeleteVpcSLBListenRequest{
+		BaseRequest: &cdshttp.BaseRequest{},
+	}
+	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionDeleteVpcSLBListen)
+	request.SetDomain(consts.LbApiHost)
+	return
+}
+
+func NewDeleteLbListenersResponse() (response *DeleteVpcSLBListenResponse) {
+	response = &DeleteVpcSLBListenResponse{
+		BaseResponse: &cdshttp.BaseResponse{},
+	}
+	return
+}
+
+func (c *Client) DeleteVpcSLBListen(request *DeleteVpcSLBListenRequest) (response *DeleteVpcSLBListenResponse, err error) {
+	if request == nil {
+		request = NewDeleteLbListenersRequest()
+	}
+	response = NewDeleteLbListenersResponse()
+	err = c.Send(request, response)
+	return
+}
 
 func NewVpcSlbBillingSchemeRequest() (request *VpcSlbBillingSchemeRequest) {
 	request = &VpcSlbBillingSchemeRequest{
@@ -213,6 +235,31 @@ func (c *Client) BandwidthBillingScheme(request *BandwidthBillingSchemeRequest) 
 		request = NewBandwidthBillingSchemeRequest()
 	}
 	response = NewBandwidthBillingSchemeResponse()
+	err = c.Send(request, response)
+	return
+}
+
+func NewDeleteVpcSlbRequest() (request *DeleteVpcSlbRequest) {
+	request = &DeleteVpcSlbRequest{
+		BaseRequest: &cdshttp.BaseRequest{},
+	}
+	request.Init().WithApiInfo(consts.ServiceLb, consts.ApiVersion, consts.ActionDeleteVpcSlb)
+	request.SetDomain(consts.LbApiHost)
+	return
+}
+
+func NewDeleteVpcSlbResponse() (response *DeleteVpcSlbResponse) {
+	response = &DeleteVpcSlbResponse{
+		BaseResponse: &cdshttp.BaseResponse{},
+	}
+	return
+}
+
+func (c *Client) DeleteVpcSlb(request *DeleteVpcSlbRequest) (response *DeleteVpcSlbResponse, err error) {
+	if request == nil {
+		request = NewDeleteVpcSlbRequest()
+	}
+	response = NewDeleteVpcSlbResponse()
 	err = c.Send(request, response)
 	return
 }

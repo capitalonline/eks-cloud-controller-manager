@@ -1,9 +1,15 @@
 package main
 
 import (
+	"log"
+	"math/rand"
+	"net/http"
+	"time"
+
+	_ "net/http/pprof"
+
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/controller"
-
 	_ "github.com/capitalonline/eks-cloud-controller-manager/pkg/provider"
 	"k8s.io/apimachinery/pkg/util/wait"
 	cloudprovider "k8s.io/cloud-provider"
@@ -15,12 +21,10 @@ import (
 	_ "k8s.io/component-base/metrics/prometheus/clientgo"
 	_ "k8s.io/component-base/metrics/prometheus/version"
 	"k8s.io/klog/v2"
-	"math/rand"
-	"time"
 )
 
 func main() {
-	klog.Info("程序启动")
+	klog.Info("ccm start...")
 	rand.Seed(time.Now().UTC().UnixNano())
 	logs.InitLogs()
 	defer logs.FlushLogs()
@@ -28,30 +32,16 @@ func main() {
 	if err != nil {
 		klog.Fatalf("unable to initialize command options: %v", err)
 	}
-	// 修改WebhookServing的默认端口，防止因为端口占用引起问题
-	//opts.WebhookServing = options.NewWebhookServingOptions(options.ProviderDefaults{
-	//	WebhookBindPort: func(port int) *int {
-	//		return &port
-	//	}(10261),
-	//})
-	//opts.NodeStatusUpdateFrequency = metav1.Duration{Duration: time.Second * 30}
-	controllerInitializers := app.DefaultInitFuncConstructors
+	controllerInitializers := initFuncConstructors()
 
-	nodeController := controller.ControllerWrapper{}
 	fss := cliflag.NamedFlagSets{}
-
-	controllerInitializers[controller.NodeControllerKey] = app.ControllerInitFuncConstructor{
-		InitContext: app.ControllerInitContext{
-			ClientName: "node-controller",
-		},
-		Constructor: nodeController.StartNodeControllerWrapper,
-	}
 	fss.FlagSet(consts.ProviderName)
-	//app.ControllersDisabledByDefault.Insert(controller.NodeControllerKey)
 	command := app.NewCloudControllerManagerCommand(opts, cloudInitializer, controllerInitializers, fss, wait.NeverStop)
-	//command.Flags().Set("cloud-provider", "true")
 
-	if err := command.Execute(); err != nil {
+	go func() {
+		log.Println(http.ListenAndServe(":6060", nil))
+	}()
+	if err = command.Execute(); err != nil {
 		klog.Fatalf("unable to execute command: %v", err)
 	}
 }
@@ -81,4 +71,27 @@ func cloudInitializer(config *cloudcontrollerconfig.CompletedConfig) cloudprovid
 	}
 
 	return cloud
+}
+
+func initFuncConstructors() map[string]app.ControllerInitFuncConstructor {
+	defaultInitFuncConstructors := app.DefaultInitFuncConstructors
+	nodeControllerWrapper := controller.NewNodeControllerWrapper()
+	// 注册一个新的节点同步器
+	defaultInitFuncConstructors[controller.NodeControllerKey] = app.ControllerInitFuncConstructor{
+		InitContext: app.ControllerInitContext{
+			ClientName: controller.NodeControllerClientName,
+		},
+		Constructor: nodeControllerWrapper.StartNodeControllerWrapper,
+	}
+
+	// 注册 EndpointsController
+	endpointsControllerWrapper := controller.NewEndpointsControllerWrapper()
+	defaultInitFuncConstructors[controller.EndpointsControllerName] = app.ControllerInitFuncConstructor{
+		InitContext: app.ControllerInitContext{
+			ClientName: controller.EndpointsControllerName,
+		},
+		Constructor: endpointsControllerWrapper.StartEndpointsControllerWrapper,
+	}
+	return defaultInitFuncConstructors
+
 }

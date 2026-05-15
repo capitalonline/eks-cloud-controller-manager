@@ -1,11 +1,12 @@
 package api
 
 import (
+	"net/http"
+
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/eks"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/utils"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/utils/profile"
-	"net/http"
 )
 
 func NodeAddresses(clusterId, nodeId string, nodeName string) ([]string, error) {
@@ -65,6 +66,58 @@ func NotifyMasterDown(request *eks.SendAlarmRequest) (*eks.SendAlarmResponse, er
 	cpf.HttpProfile.Endpoint = consts.ApiHost
 	client, _ := eks.NewClient(credential, consts.Region, cpf)
 	response, err := client.SendAlarm(request)
+	if err != nil {
+		return nil, err
+	}
+	return response, err
+}
+
+func RegisterClusterLB(request *eks.RegisterClusterLBRequest) (*eks.RegisterClusterLBResponse, error) {
+	credential := utils.NewCredential(consts.AccessKeyID, consts.AccessKeySecret)
+	cpf := profile.NewClientProfile()
+	cpf.HttpProfile.ReqMethod = http.MethodPost
+	cpf.HttpProfile.Endpoint = consts.ApiHost
+	client, _ := eks.NewClient(credential, consts.Region, cpf)
+	response, err := client.RegisterClusterLB(request)
+	if err != nil {
+		return nil, err
+	}
+	return response, err
+}
+
+func UpdateClusterLB(request *eks.UpdateClusterLBRequest) (*eks.UpdateClusterLBResponse, error) {
+	credential := utils.NewCredential(consts.AccessKeyID, consts.AccessKeySecret)
+	cpf := profile.NewClientProfile()
+	cpf.HttpProfile.ReqMethod = http.MethodPost
+	cpf.HttpProfile.Endpoint = consts.ApiHost
+	client, _ := eks.NewClient(credential, consts.Region, cpf)
+	response, err := client.UpdateClusterLB(request)
+	if err != nil {
+		return nil, err
+	}
+	return response, err
+}
+
+func DeleteClusterLB(request *eks.DeleteClusterLBRequest) (*eks.DeleteClusterLBResponse, error) {
+	credential := utils.NewCredential(consts.AccessKeyID, consts.AccessKeySecret)
+	cpf := profile.NewClientProfile()
+	cpf.HttpProfile.ReqMethod = http.MethodPost
+	cpf.HttpProfile.Endpoint = consts.ApiHost
+	client, _ := eks.NewClient(credential, consts.Region, cpf)
+	response, err := client.DeleteClusterLB(request)
+	if err != nil {
+		return nil, err
+	}
+	return response, err
+}
+
+func GetClusterLBDisabledPorts(request *eks.GetClusterLBDisabledPortsRequest) (*eks.GetClusterLBDisabledPortsResponse, error) {
+	credential := utils.NewCredential(consts.AccessKeyID, consts.AccessKeySecret)
+	cpf := profile.NewClientProfile()
+	cpf.HttpProfile.ReqMethod = http.MethodPost
+	cpf.HttpProfile.Endpoint = consts.ApiHost
+	client, _ := eks.NewClient(credential, consts.Region, cpf)
+	response, err := client.GetClusterLBDisabledPorts(request)
 	if err != nil {
 		return nil, err
 	}

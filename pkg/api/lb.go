@@ -3,12 +3,14 @@ package api
 import (
 	"errors"
 	"fmt"
+	"net/http"
+
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/consts"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/common/lb"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/utils"
 	"github.com/capitalonline/eks-cloud-controller-manager/pkg/utils/profile"
+
 	"k8s.io/klog/v2"
-	"net/http"
 )
 
 func DescribeVpcSlb(request *lb.DescribeVpcSlbRequest) (*lb.DescribeVpcSlbResponse, error) {
@@ -30,6 +32,20 @@ func PackageCreateSlb(request *lb.PackageCreateSlbRequest) (*lb.PackageCreateSlb
 	cpf.HttpProfile.Endpoint = consts.LbApiHost
 	client, _ := lb.NewClient(credential, consts.Region, cpf)
 	response, err := client.PackageCreateSlb(request)
+	if err != nil {
+		return nil, err
+	}
+	return response, err
+}
+
+func StandardCreateSlb(request *lb.StandardCreateSlbRequest) (*lb.StandardCreateSlbResponse, error) {
+	credential := utils.NewCredential(consts.AccessKeyID, consts.AccessKeySecret)
+
+	cpf := profile.NewClientProfile()
+	cpf.HttpProfile.ReqMethod = http.MethodPost
+	cpf.HttpProfile.Endpoint = consts.LbApiHost
+	client, _ := lb.NewClient(credential, consts.Region, cpf)
+	response, err := client.StandardCreateSlb(request)
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +131,32 @@ func VpcBandwidthBillingScheme(request *lb.BandwidthBillingSchemeRequest) (*lb.B
 	}
 	if response == nil || len(response.Data) < 1 {
 		return nil, errors.New("未查询到对应计费信息")
+	}
+	return response, err
+}
+
+func DeleteVpcSLBListenRequest(request *lb.DeleteVpcSLBListenRequest) (*lb.DeleteVpcSLBListenResponse, error) {
+	credential := utils.NewCredential(consts.AccessKeyID, consts.AccessKeySecret)
+	cpf := profile.NewClientProfile()
+	cpf.HttpProfile.ReqMethod = http.MethodPost
+	cpf.HttpProfile.Endpoint = consts.LbApiHost
+	client, _ := lb.NewClient(credential, consts.Region, cpf)
+	response, err := client.DeleteVpcSLBListen(request)
+	if err != nil {
+		return nil, err
+	}
+	return response, err
+}
+
+func DeleteVpcSlbRequest(request *lb.DeleteVpcSlbRequest) (*lb.DeleteVpcSlbResponse, error) {
+	credential := utils.NewCredential(consts.AccessKeyID, consts.AccessKeySecret)
+	cpf := profile.NewClientProfile()
+	cpf.HttpProfile.ReqMethod = http.MethodPost
+	cpf.HttpProfile.Endpoint = consts.LbApiHost
+	client, _ := lb.NewClient(credential, consts.Region, cpf)
+	response, err := client.DeleteVpcSlb(request)
+	if err != nil {
+		return nil, err
 	}
 	return response, err
 }

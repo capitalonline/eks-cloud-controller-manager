@@ -23,7 +23,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	metrics "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
@@ -40,7 +39,6 @@ func (n *NodeController) Validate() error {
 
 func NewNodeController() NodeController {
 	klog.Info("NewNodeController")
-	//config, err := clientcmd.RESTConfigFromKubeConfig([]byte(s))
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		log.Fatalf("newCloud:: Failed to create kubernetes config: %v", err)
@@ -55,15 +53,10 @@ func NewNodeController() NodeController {
 
 // CollectPlayLoad 获取集群节点的负载信息
 func (n *NodeController) CollectPlayLoad(ctx context.Context) error {
-	//metricList, err := n.metricsClient.MetricsV1beta1().NodeMetricses().List(context.Background(), metav1.ListOptions{})
-	//if err != nil {
-	//	klog.Info("获取指标列表失败，err:", err)
-	//	return err
-	//}
 	// 查询所有节点信息，获取余量信息
 	nodeList, err := n.clientSet.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
-		klog.Info("获取节点列表失败，err:", err)
+		klog.Info("get node list err:", err)
 		return err
 	}
 	nodeSet := make(map[string]v1.Node)
@@ -73,34 +66,7 @@ func (n *NodeController) CollectPlayLoad(ctx context.Context) error {
 	var request = commoneks.NewModifyClusterLoadRequest()
 	request.ClusterId = consts.ClusterId
 	request.NodeList = make([]commoneks.ModifyClusterLoadReqNode, 0)
-	//for _, metric := range metricList.Items {
-	//	node := nodeSet[metric.Name]
-	//	load, err := n.CalculateLoad(metric, node)
-	//	if err != nil {
-	//		continue
-	//	}
-	//	request.NodeList = append(request.NodeList, commoneks.ModifyClusterLoadReqNode{
-	//		NodeId:   node.Spec.ProviderID,
-	//		NodeName: node.Name,
-	//		//Cpu: &commoneks.ResourceInfo{
-	//		//	Usage:    load.Cpu.Usage,
-	//		//	Limits:   load.Cpu.Limits,
-	//		//	Requests: load.Cpu.Requests,
-	//		//},
-	//		//Memory: &commoneks.ResourceInfo{
-	//		//	Usage:    load.Mem.Usage,
-	//		//	Limits:   load.Mem.Limits,
-	//		//	Requests: load.Mem.Requests,
-	//		//},
-	//		Status: load.Status,
-	//	})
-	//}
 	for _, node := range nodeList.Items {
-		//node := nodeSet[metric.Name]
-		//load, err := n.CalculateLoad(metric, node)
-		//if err != nil {
-		//	continue
-		//}
 		status := consts.NodeStatusNotReady
 		if NodeReady(node) {
 			status = consts.NodeStatusReady
@@ -113,76 +79,21 @@ func (n *NodeController) CollectPlayLoad(ctx context.Context) error {
 			scheduleStr = "0"
 		}
 		request.NodeList = append(request.NodeList, commoneks.ModifyClusterLoadReqNode{
-			NodeId:   node.Spec.ProviderID,
-			NodeName: node.Name,
-			//Cpu: &commoneks.ResourceInfo{
-			//	Usage:    load.Cpu.Usage,
-			//	Limits:   load.Cpu.Limits,
-			//	Requests: load.Cpu.Requests,
-			//},
-			//Memory: &commoneks.ResourceInfo{
-			//	Usage:    load.Mem.Usage,
-			//	Limits:   load.Mem.Limits,
-			//	Requests: load.Mem.Requests,
-			//},
+			NodeId:      node.Spec.ProviderID,
+			NodeName:    node.Name,
 			Status:      status,
 			ScheduleStr: scheduleStr,
 		})
 	}
 	_, err = api.ModifyClusterLoad(request)
 	if err != nil {
-		klog.Info("同步节点负载失败，err:", err)
+		klog.Info("ModifyClusterLoad err:", err)
 		return err
 	}
-	klog.Info("更新节点负载成功")
 	return nil
 }
-
-func (n *NodeController) CalculateLoad(metric v1beta1.NodeMetrics, node v1.Node) (commoneks.NodeLoad, error) {
-	usage := metric.Usage
-	cpuUsage := float64(usage.Cpu().MilliValue()) / float64(node.Status.Allocatable.Cpu().MilliValue())
-	memoryUsage := float64(usage.Memory().MilliValue()) / float64(node.Status.Allocatable.Memory().MilliValue())
-	//cpuRequests := float64(usage.Cpu().MilliValue())/float64(node.Status)
-	var (
-		requestCpu int64
-		requestMem int64
-		limitCpu   int64
-		limitMem   int64
-		allCpu     = node.Status.Allocatable.Cpu().MilliValue()
-		allMem     = node.Status.Allocatable.Memory().MilliValue()
-		//status     = "NotReady"
-		status = consts.NodeStatusNotReady
-	)
-	if NodeReady(node) {
-		status = consts.NodeStatusReady
-	}
-
-	pods, _ := n.clientSet.CoreV1().Pods(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("spec.nodeName=%s", node.Name)})
-	for _, pod := range pods.Items {
-		for _, container := range pod.Spec.Containers {
-			requestCpu += container.Resources.Requests.Cpu().MilliValue()
-			requestMem += container.Resources.Requests.Memory().MilliValue()
-			limitCpu += container.Resources.Limits.Cpu().MilliValue()
-			limitMem += container.Resources.Limits.Cpu().MilliValue()
-		}
-	}
-	return commoneks.NodeLoad{
-		Cpu: commoneks.ResourceInfo{
-			Usage:    int64(cpuUsage * 100),
-			Limits:   int64(float64(limitCpu) / float64(allCpu) * 100),
-			Requests: int64(float64(requestCpu) / float64(allCpu) * 100),
-		},
-		Mem: commoneks.ResourceInfo{
-			Usage:    int64(memoryUsage * 100),
-			Limits:   int64(float64(limitMem) / float64(allMem) * 100),
-			Requests: int64(float64(requestMem) / float64(allMem) * 100),
-		},
-		Status: status,
-	}, nil
-}
-
-func (n *NodeController) Run(ctx context.Context) error {
-	klog.Info("开始运行run")
+func (n *NodeController) Run(ctx context.Context) {
+	klog.Info("start node controller")
 	ticker := time.NewTicker(time.Minute * 3)
 	for {
 		select {
@@ -191,25 +102,23 @@ func (n *NodeController) Run(ctx context.Context) error {
 			if err != nil {
 				klog.Infoln(err)
 			}
-			klog.Info("更新负载")
 			err = n.CollectPlayLoad(ctx)
 			if err != nil {
 				klog.Infoln(err)
 			}
 		case <-ctx.Done():
-			klog.Info("程序退出")
-			return nil
+			klog.Info("stop node controller")
+			return
 		}
 	}
 }
 
 func (n *NodeController) ListenNodes(ctx context.Context) {
-
 	factory := informers.NewSharedInformerFactory(n.clientSet, time.Second)
 	informer := factory.Core().V1().Events().Informer()
 	stopCh := make(chan struct{})
 	factory.Core().V1().Events().Lister()
-	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+	_, _ = informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			event, _ := obj.(*v1.Event)
 			switch event.Reason {
@@ -244,10 +153,10 @@ func (n *NodeController) ListenNodes(ctx context.Context) {
 
 	factory.Start(stopCh)
 	if !cache.WaitForCacheSync(stopCh, informer.HasSynced) {
-		klog.Errorf("同步事件失败")
+		klog.Errorf("WaitForCacheSync failed")
 		return
 	}
-	fmt.Println("informer run")
+	klog.Info("informer running...")
 	go informer.Run(stopCh)
 	<-ctx.Done()
 }
@@ -286,22 +195,23 @@ func (n *NodeController) NotifyNodeReady(ctx context.Context, event *v1.Event) {
 
 func (n *NodeController) NotifyNodeDown(ctx context.Context, event *v1.Event) {
 	if event.Source.Component != "node-controller" || event.Namespace != v1.NamespaceDefault {
-		//klog.Errorf("event source is not node-controller")
 		return
 	}
 	node, err := n.clientSet.CoreV1().Nodes().Get(ctx, event.InvolvedObject.Name, metav1.GetOptions{})
+	if err != nil || node == nil {
+		return
+	}
 	_, controlPlaneOk := node.Labels[consts.NodeRoleControlPlane]
 	_, masterOk := node.Labels[consts.NodeRoleMaster]
 	if !controlPlaneOk && !masterOk {
+		// 非master节点跳过检查
 		return
 	}
-	if err != nil || node == nil || NodeHealth(*node) {
-		data, _ := json.Marshal(node)
-		klog.Infof("err: %v,node ready %v, Unreachable:%v,nodehealth:%v, node:%s, ", err, NodeReady(*node), NodeUnreachable(*node), NodeHealth(*node), string(data))
+	if NodeHealth(*node) {
+		klog.Infof("%s NodeReady:%v, Unreachable:%v", node.Name, NodeReady(*node), NodeUnreachable(*node))
 		return
 	}
 	klog.Info("node is unhealth")
-	// worker节点忽略
 
 	recordName := fmt.Sprintf("ccm-%s-down", node.Name)
 	record, err := n.clientSet.CoreV1().Events(v1.NamespaceDefault).Get(ctx, recordName, metav1.GetOptions{})
@@ -377,7 +287,7 @@ func (n *NodeController) NotifyNodeDown(ctx context.Context, event *v1.Event) {
 	if err != nil && !kerrors.IsAlreadyExists(err) {
 		klog.Errorf("crate event %s err:%s", recordName, err.Error())
 	}
-	n.clientSet.CoreV1().ConfigMaps(consts.NameSpaceKubeSystem).Get(ctx, "kubeadm-config", metav1.GetOptions{})
+
 	klog.Info("notify down success")
 }
 
@@ -439,14 +349,10 @@ func NodeIP(node v1.Node) (string, error) {
 }
 
 func (n *NodeController) Update(ctx context.Context) error {
-	//config, err := rest.InClusterConfig()
-	//if err != nil {
-	//	log.Fatalf("newCloud:: Failed to create kubernetes config: %v", err)
-	//}
-	//clientSet, err := kubernetes.NewForConfig(config)
 	nodes, err := n.clientSet.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		klog.Error("list nodes failed")
+		return fmt.Errorf("list nodes failed with error %v", err)
 	}
 	for i := 0; i < len(nodes.Items); i++ {
 		node := nodes.Items[i]
@@ -455,47 +361,30 @@ func (n *NodeController) Update(ctx context.Context) error {
 			continue
 		}
 
-		// TODO 批量查
-		details, err := api.NodeCCMInit(consts.ClusterId, node.Spec.ProviderID, "")
-		if err != nil {
-			return err
+		details, e := api.NodeCCMInit(consts.ClusterId, node.Spec.ProviderID, "")
+		if e != nil {
+			return e
 		}
-		// id为空可能是节点添加后任务流还未回调ccm就查询了，需要跳过
 		if details == nil || details.Data.NodeId == "" {
+			// id为空可能是节点添加后任务流还未回调ccm就查询了，需要跳过
 			continue
 		}
 		switch details.Data.Status {
 		case consts.NodeStatusDeleted:
-			//需要ccm主动触发删除该节点
-			//if err := n.clientSet.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{}); err != nil {
-			//	klog.Errorf("unable to delete node %q: %v", node.Name, err)
-			//}
 			klog.Warningf("node %s (providerId:%s) deleted from eks-server,but exists in kubernetes", node.Name, node.Spec.ProviderID)
 		case consts.NodeStatusRunning:
 			oldNode := node.DeepCopy()
-			if err := UpdateNode(&node, details.Data); err != nil {
+			if err = UpdateNode(&node, details.Data); err != nil {
 				return fmt.Errorf("update node %s failed with error %v", node.Name, err)
 			}
-
-			//flag, err := UpdateNode(&node, details.Data)
-			//if err != nil {
-			//	return err
-			//}
 			if !reflect.DeepEqual(node.Labels, oldNode.Labels) ||
 				!reflect.DeepEqual(node.Spec.Taints, oldNode.Spec.Taints) ||
 				!reflect.DeepEqual(node.Annotations, oldNode.Annotations) {
 				_, err = n.clientSet.CoreV1().Nodes().Update(context.Background(), &node, metav1.UpdateOptions{})
 				if err != nil {
-					klog.Errorf("更新节点失败，err:%v", err)
+					klog.Errorf("UpdateNode err: %v", err)
 				}
 			}
-
-			//if flag {
-			//	_, err = n.clientSet.CoreV1().Nodes().Update(context.Background(), &node, metav1.UpdateOptions{})
-			//	if err != nil {
-			//		klog.Errorf("更新节点失败，err:%v", err)
-			//	}
-			//}
 		default:
 		}
 	}
@@ -507,9 +396,6 @@ func UpdateNode(node *v1.Node, detail *commoneks.NodeCCMInitResponseData) error 
 	if detail == nil || node == nil {
 		return errors.New("invalid node")
 	}
-	//labelFlag := UpdateNodeLabels(node, detail)
-	//taintFlag := UpdateNodeTaints(node, detail)
-	//annotationFlag := UpdateNodeAnnotations(node, detail)
 	UpdateNodeLabels(node, detail)
 	UpdateNodeTaints(node, detail)
 	UpdateNodeAnnotations(node, detail)
